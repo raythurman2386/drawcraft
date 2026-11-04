@@ -369,10 +369,12 @@ impl eframe::App for DrawCraftApp {
         }
         self.handle_shortcuts(ui.ctx());
 
+        // egui hands out space in call order: claim the top and bottom bars
+        // before the side panels so both bars span the full window width.
         self.top_bar(ui);
+        self.status_bar(ui);
         self.tool_rail(ui);
         self.right_panel(ui);
-        self.status_bar(ui);
         egui::CentralPanel::default().show(ui, |ui| {
             self.canvas(ui);
         });

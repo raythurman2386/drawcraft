@@ -3,7 +3,7 @@ use drawcraft_document::ShapeKind;
 use drawcraft_editor::Tool;
 use egui::{
     Align, Align2, Button, CornerRadius, FontId, Frame, Layout, Margin, Rect, Response, RichText,
-    Sense, Stroke, pos2, vec2,
+    Sense, Stroke, TextStyle, WidgetInfo, WidgetType, pos2, vec2,
 };
 use serde_json::json;
 
@@ -24,9 +24,22 @@ impl DrawCraftApp {
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
                     logo(ui, p);
-                    ui.label(RichText::new("DrawCraft").size(14.0).strong().color(p.text));
+                    ui.label(
+                        RichText::new("DrawCraft")
+                            .text_style(TextStyle::Body)
+                            .strong()
+                            .color(p.text),
+                    );
                     if self.session.dirty {
-                        ui.label(RichText::new("•").size(10.0).color(p.accent));
+                        ui.label(
+                            RichText::new("•")
+                                .text_style(TextStyle::Body)
+                                .color(p.accent),
+                        )
+                        .on_hover_text("Unsaved changes")
+                        .widget_info(|| {
+                            WidgetInfo::labeled(WidgetType::Label, true, "Unsaved changes")
+                        });
                     }
                     ui.add_space(8.0);
 
@@ -35,20 +48,24 @@ impl DrawCraftApp {
                     menu_view(self, ui);
                     menu_help(self, ui);
                     self.shapes_menu(ui);
+                    ui.add_space(8.0);
 
+                    // Right cluster. Children are added right to left, so the
+                    // visual order is: Undo Redo [- 100% + Fit] ? Night.
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if text_button(
-                            ui,
-                            if self.session.editor.view.dark {
-                                "Day"
-                            } else {
-                                "Night"
-                            },
-                            "Toggle GrokDay / GrokNight",
-                            true,
-                        )
-                        .clicked()
-                        {
+                        // The cluster only gets the space left after the menus.
+                        // Clip to it so it can never paint over them, even if
+                        // the window is narrower than the cluster.
+                        let clip = ui.max_rect().intersect(ui.clip_rect());
+                        ui.set_clip_rect(clip);
+
+                        let dark = self.session.editor.view.dark;
+                        let (theme_label, theme_name) = if dark {
+                            ("Day", "Switch to GrokDay (light theme)")
+                        } else {
+                            ("Night", "Switch to GrokNight (dark theme)")
+                        };
+                        if text_button(ui, theme_label, theme_name, true).clicked() {
                             self.toggle_dark();
                         }
                         if text_button(ui, "?", "Keyboard shortcuts", true).clicked() {
@@ -60,28 +77,31 @@ impl DrawCraftApp {
                             .corner_radius(6)
                             .inner_margin(Margin::symmetric(4, 1))
                             .show(ui, |ui| {
-                                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                                    if text_button(ui, "-", "Zoom out", true).clicked() {
-                                        self.run(ids::VIEW_ZOOM_OUT, json!({}));
-                                    }
-                                    ui.label(
-                                        RichText::new(format!(
-                                            "{:.0}%",
-                                            self.session.editor.camera.zoom * 100.0
-                                        ))
-                                        .size(11.0)
-                                        .monospace()
-                                        .color(p.secondary),
-                                    );
-                                    if text_button(ui, "+", "Zoom in", true).clicked() {
-                                        self.run(ids::VIEW_ZOOM_IN, json!({}));
-                                    }
+                                // `horizontal` sizes the pill to its contents and
+                                // inherits right-to-left, so add in reverse. A nested
+                                // `with_layout(left_to_right)` here claimed all the
+                                // leftover width and pushed Undo/Redo onto the menus.
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 2.0;
                                     if text_button(ui, "Fit", "Zoom to fit", true).clicked() {
                                         self.run(ids::VIEW_ZOOM_TO_FIT, json!({}));
                                     }
+                                    if text_button(ui, "+", "Zoom in", true).clicked() {
+                                        self.run(ids::VIEW_ZOOM_IN, json!({}));
+                                    }
+                                    let zoom = self.session.editor.camera.zoom * 100.0;
+                                    ui.label(
+                                        RichText::new(format!("{zoom:>4.0}%"))
+                                            .text_style(TextStyle::Monospace)
+                                            .color(p.secondary),
+                                    )
+                                    .on_hover_text("Zoom level");
+                                    if text_button(ui, "-", "Zoom out", true).clicked() {
+                                        self.run(ids::VIEW_ZOOM_OUT, json!({}));
+                                    }
                                 });
                             });
-                        ui.add_space(2.0);
+                        ui.add_space(4.0);
                         if text_button(
                             ui,
                             "Redo",
@@ -254,7 +274,9 @@ impl DrawCraftApp {
     fn shapes_menu(&mut self, ui: &mut egui::Ui) {
         let p = theme::palette(self.session.editor.view.dark);
         ui.menu_button(
-            RichText::new("Shapes…").size(12.0).color(p.secondary),
+            RichText::new("Shapes…")
+                .text_style(TextStyle::Button)
+                .color(p.secondary),
             |ui| {
                 egui::ScrollArea::vertical()
                     .max_height(430.0)
@@ -276,33 +298,38 @@ impl DrawCraftApp {
 
     pub(crate) fn status_bar(&mut self, ui: &mut egui::Ui) {
         let p = theme::palette(self.session.editor.view.dark);
+        // The inspector already shows the selection and the shape count, and the
+        // top bar shows the zoom. Only repeat them here when the inspector is hidden.
+        let inspector_visible = self.state.show_properties;
         egui::Panel::bottom("drawcraft-status")
             .frame(
                 Frame::new()
                     .fill(p.surface)
                     .stroke(Stroke::new(1.0, p.highlight))
-                    .inner_margin(Margin::symmetric(12, 3)),
+                    .inner_margin(Margin::symmetric(12, 4)),
             )
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new("•").size(11.0).color(p.accent));
                     ui.label(
                         RichText::new(self.session.editor.tool.label())
-                            .size(11.0)
+                            .text_style(TextStyle::Body)
                             .strong()
                             .color(p.secondary),
-                    );
-                    dot(ui, p.muted);
-                    let selection = self.session.editor.selection.len();
-                    ui.label(
-                        RichText::new(if selection == 0 {
-                            "Nothing selected".to_owned()
-                        } else {
-                            format!("{selection} selected")
-                        })
-                        .size(11.0)
-                        .color(p.muted),
-                    );
+                    )
+                    .on_hover_text("Active tool");
+                    if !inspector_visible {
+                        dot(ui, p.muted);
+                        let selection = self.session.editor.selection.len();
+                        status_text(
+                            ui,
+                            p,
+                            if selection == 0 {
+                                "Nothing selected".to_owned()
+                            } else {
+                                format!("{selection} selected")
+                            },
+                        );
+                    }
                     dot(ui, p.muted);
                     let page = self
                         .session
@@ -311,24 +338,30 @@ impl DrawCraftApp {
                         .active()
                         .map(|page| page.name.clone())
                         .unwrap_or_else(|| "No page".into());
-                    ui.label(RichText::new(page).size(11.0).color(p.muted));
+                    status_text(ui, p, page);
                     dot(ui, p.muted);
-                    ui.label(RichText::new(&self.state.status).size(11.0).color(p.muted));
+                    status_text(ui, p, self.state.status.clone());
 
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         let pointer = self.state.last_pointer_world;
+                        // Fixed-width slots so the row does not jitter as the pointer moves.
                         ui.label(
-                            RichText::new(format!(
-                                "{} shapes   {:.0}%   {:.0}, {:.0}",
-                                self.session.editor.doc.shapes().len(),
-                                self.session.editor.camera.zoom * 100.0,
-                                pointer.x,
-                                pointer.y
-                            ))
-                            .size(10.5)
-                            .monospace()
-                            .color(p.muted),
-                        );
+                            RichText::new(format!("x {:>6.0}  y {:>6.0}", pointer.x, pointer.y))
+                                .text_style(TextStyle::Monospace)
+                                .color(p.muted),
+                        )
+                        .on_hover_text("Pointer position (canvas units)");
+                        if !inspector_visible {
+                            let shapes = self.session.editor.doc.shapes().len();
+                            status_text(
+                                ui,
+                                p,
+                                format!(
+                                    "{shapes} {}",
+                                    if shapes == 1 { "shape" } else { "shapes" }
+                                ),
+                            );
+                        }
                     });
                 });
             });
@@ -487,14 +520,26 @@ fn section_label(ui: &mut egui::Ui, label: &str, color: egui::Color32) {
 }
 
 fn dot(ui: &mut egui::Ui, color: egui::Color32) {
-    ui.label(RichText::new("·").size(11.0).color(color));
+    ui.label(RichText::new("·").text_style(TextStyle::Body).color(color));
 }
 
+fn status_text(ui: &mut egui::Ui, p: theme::Palette, text: String) {
+    ui.label(
+        RichText::new(text)
+            .text_style(TextStyle::Body)
+            .color(p.muted),
+    );
+}
+
+/// A frameless chrome button. `tooltip` doubles as the accessible name, so
+/// glyph-only labels such as "?" or "-" are still announced meaningfully.
 fn text_button(ui: &mut egui::Ui, label: &str, tooltip: &str, enabled: bool) -> Response {
-    let button = Button::new(RichText::new(label).size(10.5))
+    let button = Button::new(RichText::new(label).text_style(TextStyle::Button))
         .frame(false)
         .min_size(egui::vec2(24.0, 26.0));
-    ui.add_enabled(enabled, button).on_hover_text(tooltip)
+    let response = ui.add_enabled(enabled, button);
+    response.widget_info(|| WidgetInfo::labeled(WidgetType::Button, enabled, tooltip));
+    response.on_hover_text(tooltip)
 }
 
 fn logo(ui: &mut egui::Ui, p: theme::Palette) {

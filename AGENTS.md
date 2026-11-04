@@ -49,7 +49,7 @@ Tool gestures may mutate shapes directly during a drag for performance, but they
 
 ## Coding standards
 
-- Edition 2024, Rust 1.95+. Workspace clippy denies `unwrap_used`, `expect_used`, `panic`, `todo`, `unimplemented`, `dbg_macro`.
+- Edition 2024. Toolchain is pinned to Rust 1.99.0 in `rust-toolchain.toml` (same as CI); the declared MSRV is `rust-version = "1.95"` in `Cargo.toml`. Workspace clippy denies `unwrap_used`, `expect_used`, `panic`, `todo`, `unimplemented`, `dbg_macro`.
 - Production code returns `Result`; no panics on user input. Tests may use `unwrap`/`panic` (crate-level `cfg_attr(test, allow(...))`).
 - Cap untrusted allocations. The document loader is limited to 16 MiB; images to 8192×8192 / 32 MiB; export scale to 8× and 64 MiB total pixels.
 - Validate at boundaries and keep the engine total. Coordinates must be finite; sizes non-negative.
@@ -101,7 +101,9 @@ Other tasks: `xtask fmt`, `clippy`, `test`, `build`, `wasm`, `bundle`, `layers`,
 - File/session commands: `crates/session/src/lib.rs`
 - MCP protocol: `crates/mcp/src/lib.rs`
 - Canvas gestures: `crates/app/src/canvas.rs`
+- Top bar, tool rail, and status bar: `crates/app/src/toolbar.rs`
 - Panels and style controls: `crates/app/src/panels.rs`
+- UI-only state (dialogs, palette, pointer): `crates/app/src/state.rs`
 - Theme and palette: `crates/app/src/theme.rs`
 - Original line icons: `crates/app/src/icons.rs`
 
