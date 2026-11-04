@@ -1,0 +1,18 @@
+[package]
+name = "drawcraft-render"
+description = "DrawCraft display list, SVG writer, and PNG rasteriser."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+drawcraft-document = { path = "../document" }
+drawcraft-geometry = { path = "../geometry" }
+resvg.workspace = true
+tiny-skia.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,7 @@
+/target
+/dist
+*.drawcraft
+!fixtures/*.drawcraft
+.DS_Store
+.idea/
+.vscode/

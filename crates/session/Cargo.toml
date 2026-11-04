@@ -1,0 +1,24 @@
+[package]
+name = "drawcraft-session"
+description = "DrawCraft workspace session: file lifecycle, exports, and recent documents."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+drawcraft-command = { path = "../command" }
+drawcraft-document = { path = "../document" }
+drawcraft-editor = { path = "../editor" }
+drawcraft-format = { path = "../format" }
+drawcraft-render = { path = "../render" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

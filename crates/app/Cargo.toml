@@ -1,0 +1,33 @@
+[package]
+name = "drawcraft-app"
+description = "DrawCraft desktop application (egui/eframe over the headless editor)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+base64 = "0.22"
+clap.workspace = true
+drawcraft-command = { path = "../command" }
+drawcraft-document = { path = "../document" }
+drawcraft-editor = { path = "../editor" }
+drawcraft-format = { path = "../format" }
+drawcraft-geometry = { path = "../geometry" }
+drawcraft-mcp = { path = "../mcp" }
+drawcraft-render = { path = "../render" }
+drawcraft-session = { path = "../session" }
+eframe = "0.36"
+egui = "0.36"
+image.workspace = true
+rfd.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[[bin]]
+name = "drawcraft"
+path = "src/main.rs"
+
+[lints]
+workspace = true

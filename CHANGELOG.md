@@ -1,0 +1,50 @@
+# Changelog
+
+All notable changes to DrawCraft are documented here.
+
+## [0.2.0] — 2026-11-04
+
+A full correctness and maintainability pass over the MVP. The document model and command surface are now treated as the foundation for v1 rather than a prototype.
+
+### Added
+
+- `drawcraft-session` crate: file lifecycle, recent documents, export commands, and a single `execute` entry point used by the UI, CLI, and MCP.
+- Command registry with 56 commands, typed parameters, scopes, categories, and a coverage test.
+- Proper MCP stdio server: notifications, parse errors, tools, resources, command catalog, base64 PNG previews, open/save/export tools.
+- Faithful SVG export for paths, dashes, text, arrowheads, patterns, clips, and images.
+- PNG export through `resvg` with system fonts, scale limits, and transparent background support.
+- Ear-clipping triangulation so concave shapes fill correctly on the GPU.
+- All 20 geometric shape paths, arrowhead geometry, hand-drawn wobble, and pattern hatching in the renderer.
+- Multi-page UI with page list, rename, add/duplicate/delete.
+- `edit.select` so agents and scripts can target shape ids without a pointer.
+- Selection handles for resize and rotation, marquee selection, Alt-drag copy, snapping, grid, minimap, focus mode, and dark mode.
+- Style/properties panel, arrow routing/head controls, text editor window, command palette, and keyboard shortcuts.
+- Document validation: reference integrity, caps, finite geometry, style bounds.
+- Unknown-field preservation at document, page, shape, and style levels.
+- `ARCHITECTURE.md`, expanded `FORMAT.md`, rewritten `AGENTS.md`, `README.md`, and `ROADMAP.md`.
+- GrokDay and GrokNight themes with the exact palette roles, a refined top bar, icon-based tool rail, inspector cards, dot grid, empty state, and optional minimap.
+- `--dark` launch flag for GrokNight.
+- `xtask` layering checks, command coverage, WASM core build, and bundle task.
+- CI workflow.
+
+### Fixed
+
+- Replaced the prototype's placeholder unknown-command error with a typed error.
+- Camera zoom now anchors the world point under the pointer.
+- Corrected page-id and shape-id generation/deduplication.
+- Arrow bindings and frame parents are remapped when duplicating pages or pasting.
+- MCP no longer terminates on malformed input and no longer replies to notifications.
+- Duplicate page now remaps bindings instead of producing invalid documents.
+- The UI no longer draws every shape as a rectangle; it renders the shared scene graph.
+- CLI `cargo run` works because the app is a default workspace member.
+- Canvas painting now respects the central panel origin (scene no longer draws under the side panels).
+- Opening a document defers zoom-to-fit until the real viewport is known.
+- PNG text export uses the portable `sans-serif` family instead of the ambiguous `sans` family.
+- Removed the prototype's placeholder error text and minified one-line modules.
+- Fixed the left tool rail growing while the pointer moves: the rail and its rows now use fixed widths instead of a feedback loop through `ui.available_width`.
+- Removed the always-visible page-name field in the inspector (now a Rename action), clipped the minimap viewport, and turned the minimap off by default.
+- Selection dimensions are only shown while dragging.
+
+## [0.1.0] — 2026-11-04
+
+Initial prototype: workspace, minimal editor, commands, MCP, JSON format, basic egui canvas.

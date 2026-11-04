@@ -1,0 +1,258 @@
+#![allow(clippy::print_stdout, clippy::print_stderr)]
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitCode};
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let command = args.first().map(String::as_str).unwrap_or("help");
+    match dispatch(command, &args[1..]) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("xtask: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn dispatch(command: &str, args: &[String]) -> Result<()> {
+    match command {
+        "fmt" => run_cargo(&["fmt", "--all"]),
+        "clippy" => run_cargo(&[
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ]),
+        "test" => run_cargo(&["test", "--workspace"]),
+        "build" => run_cargo(&["build", "--workspace"]),
+        "wasm" => wasm(),
+        "bundle" => bundle(),
+        "layers" | "check-layers" => check_layers(),
+        "commands" | "check-commands" => check_commands(),
+        "check" | "all" => {
+            run_cargo(&["fmt", "--all", "--", "--check"])?;
+            run_cargo(&[
+                "clippy",
+                "--workspace",
+                "--all-targets",
+                "--",
+                "-D",
+                "warnings",
+            ])?;
+            run_cargo(&["test", "--workspace"])?;
+            check_layers()?;
+            check_commands()?;
+            println!("all checks passed");
+            Ok(())
+        }
+        "run" => {
+            let mut command = Command::new("cargo");
+            command.args(["run", "-p", "drawcraft-app", "--"]);
+            command.args(args);
+            status(command)
+        }
+        "help" | "--help" | "-h" => {
+            println!(
+                "xtask: fmt | clippy | test | build | wasm | bundle | layers | commands | check | all"
+            );
+            Ok(())
+        }
+        other => Err(format!("unknown task {other}").into()),
+    }
+}
+
+fn run_cargo(args: &[&str]) -> Result<()> {
+    let mut command = Command::new("cargo");
+    command.args(args);
+    status(command)
+}
+
+fn status(mut command: Command) -> Result<()> {
+    let status = command.status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!("command failed with {status}").into())
+    }
+}
+
+fn workspace_root() -> Result<PathBuf> {
+    Ok(Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or("workspace root not found")?
+        .to_path_buf())
+}
+
+fn metadata() -> Result<serde_json::Value> {
+    let output = Command::new("cargo")
+        .args(["metadata", "--format-version", "1", "--no-deps"])
+        .current_dir(workspace_root()?)
+        .output()?;
+    if !output.status.success() {
+        return Err("cargo metadata failed".into());
+    }
+    Ok(serde_json::from_slice(&output.stdout)?)
+}
+
+fn check_layers() -> Result<()> {
+    let metadata = metadata()?;
+    let allowed = allowed_edges();
+    let packages = metadata
+        .get("packages")
+        .and_then(serde_json::Value::as_array)
+        .ok_or("metadata packages missing")?;
+    let mut problems = Vec::new();
+    for package in packages {
+        let Some(name) = package.get("name").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        let Some(allowed_for_crate) = allowed.get(name) else {
+            continue;
+        };
+        let Some(dependencies) = package
+            .get("dependencies")
+            .and_then(serde_json::Value::as_array)
+        else {
+            continue;
+        };
+        for dependency in dependencies {
+            let Some(dep_name) = dependency.get("name").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            if !dep_name.starts_with("drawcraft-") {
+                continue;
+            }
+            if !allowed_for_crate.contains(dep_name) {
+                problems.push(format!(
+                    "{name} must not depend on {dep_name} (layering violation)"
+                ));
+            }
+        }
+    }
+    if problems.is_empty() {
+        println!("layering ok ({} workspace crates)", packages.len());
+        Ok(())
+    } else {
+        for problem in &problems {
+            eprintln!("{problem}");
+        }
+        Err(format!("{} layering violation(s)", problems.len()).into())
+    }
+}
+
+fn allowed_edges() -> BTreeMap<&'static str, BTreeSet<&'static str>> {
+    let mut allowed: BTreeMap<&'static str, BTreeSet<&'static str>> = BTreeMap::new();
+    allowed.insert("drawcraft-geometry", BTreeSet::new());
+    allowed.insert("drawcraft-command", BTreeSet::new());
+    allowed.insert("drawcraft-document", BTreeSet::from(["drawcraft-geometry"]));
+    allowed.insert(
+        "drawcraft-editor",
+        BTreeSet::from([
+            "drawcraft-command",
+            "drawcraft-document",
+            "drawcraft-geometry",
+        ]),
+    );
+    allowed.insert(
+        "drawcraft-render",
+        BTreeSet::from(["drawcraft-document", "drawcraft-geometry"]),
+    );
+    allowed.insert(
+        "drawcraft-format",
+        BTreeSet::from([
+            "drawcraft-document",
+            "drawcraft-geometry",
+            "drawcraft-render",
+        ]),
+    );
+    allowed.insert(
+        "drawcraft-session",
+        BTreeSet::from([
+            "drawcraft-command",
+            "drawcraft-document",
+            "drawcraft-editor",
+            "drawcraft-format",
+            "drawcraft-geometry",
+            "drawcraft-render",
+        ]),
+    );
+    allowed.insert(
+        "drawcraft-mcp",
+        BTreeSet::from(["drawcraft-command", "drawcraft-format", "drawcraft-session"]),
+    );
+    allowed.insert(
+        "drawcraft-app",
+        BTreeSet::from([
+            "drawcraft-command",
+            "drawcraft-document",
+            "drawcraft-editor",
+            "drawcraft-format",
+            "drawcraft-geometry",
+            "drawcraft-mcp",
+            "drawcraft-render",
+            "drawcraft-session",
+        ]),
+    );
+    allowed.insert("xtask", BTreeSet::new());
+    allowed
+}
+
+fn check_commands() -> Result<()> {
+    run_cargo(&[
+        "test",
+        "-p",
+        "drawcraft-editor",
+        "--lib",
+        "every_editor_command_is_handled_by_dispatch",
+        "--",
+    ])
+}
+
+fn wasm() -> Result<()> {
+    let targets = ["wasm32-unknown-unknown"];
+    let installed = Command::new("rustup")
+        .args(["target", "list", "--installed"])
+        .output();
+    if let Ok(output) = installed {
+        let text = String::from_utf8_lossy(&output.stdout);
+        if !text.lines().any(|line| line.trim() == targets[0]) {
+            return Err("wasm32-unknown-unknown is not installed (rustup target add wasm32-unknown-unknown)".into());
+        }
+    }
+    for package in [
+        "drawcraft-geometry",
+        "drawcraft-command",
+        "drawcraft-document",
+        "drawcraft-editor",
+    ] {
+        run_cargo(&["build", "--target", "wasm32-unknown-unknown", "-p", package])?;
+    }
+    println!("wasm core crates built");
+    Ok(())
+}
+
+fn bundle() -> Result<()> {
+    run_cargo(&["build", "--release", "-p", "drawcraft-app"])?;
+    let root = workspace_root()?;
+    let binary = root.join("target").join("release").join(binary_name());
+    if binary.exists() {
+        println!("bundled binary: {}", binary.display());
+        Ok(())
+    } else {
+        Err(format!("expected binary at {}", binary.display()).into())
+    }
+}
+
+fn binary_name() -> &'static str {
+    if cfg!(windows) {
+        "drawcraft.exe"
+    } else {
+        "drawcraft"
+    }
+}
