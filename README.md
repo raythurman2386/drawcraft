@@ -84,6 +84,17 @@ Runs formatting check, strict clippy (`-D warnings`), all tests, layer-rule vali
 
 Other tasks: `xtask fmt`, `clippy`, `test`, `build`, `wasm`, `bundle`, `layers`, `commands`, `run -- ...`.
 
+### Releases
+
+Push an annotated `vX.Y.Z` tag to cut a release:
+
+```sh
+git tag -a v0.2.0 -m "v0.2.0"
+git push origin v0.2.0
+```
+
+`.github/workflows/release.yml` builds the desktop binary for Linux (x86_64), macOS (aarch64), and Windows (x86_64), packages each with the licenses, README, and changelog (`.tar.gz` on Unix, `.zip` on Windows), and publishes a GitHub release with `checksums.txt` and generated notes. Tags with a hyphen (`v0.3.0-rc.1`) are marked as prereleases.
+
 ## Architecture
 
 Layered, testable, no window required below the UI:
