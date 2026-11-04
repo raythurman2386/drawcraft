@@ -392,17 +392,7 @@ impl DrawCraftApp {
                 .collect();
             for (id, name, count) in pages {
                 let selected = id == active;
-                let text = RichText::new(format!("{name}   {count}"))
-                    .size(11.5)
-                    .color(if selected { p.accent } else { p.secondary });
-                if ui
-                    .add_sized(
-                        [ui.available_width(), 25.0],
-                        Button::new(text).selected(selected).frame(false),
-                    )
-                    .clicked()
-                    && !selected
-                {
+                if page_row(ui, p, &name, count, selected).clicked() && !selected {
                     self.run(ids::PAGE_SET_ACTIVE, json!({"id": id}));
                 }
             }
@@ -679,6 +669,45 @@ impl DrawCraftApp {
             self.state.last_error = None;
         }
     }
+}
+
+/// One page in the Pages list: name on the left, shape count on the right.
+fn page_row(ui: &mut egui::Ui, p: Palette, name: &str, count: usize, selected: bool) -> Response {
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), 25.0), Sense::click());
+    let shapes = format!("{count} {}", if count == 1 { "shape" } else { "shapes" });
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::WidgetType::SelectableLabel,
+            true,
+            selected,
+            format!("{name}, {shapes}"),
+        )
+    });
+    let painter = ui.painter();
+    if selected {
+        painter.rect_filled(rect, CornerRadius::same(6), theme::with_alpha(p.accent, 30));
+    } else if response.hovered() {
+        painter.rect_filled(rect, CornerRadius::same(6), p.highlight);
+    }
+    let body = egui::TextStyle::Body.resolve(ui.style());
+    let small = egui::TextStyle::Small.resolve(ui.style());
+    let inner = rect.shrink2(egui::vec2(8.0, 0.0));
+    painter.text(
+        inner.left_center(),
+        Align2::LEFT_CENTER,
+        name,
+        body,
+        if selected { p.accent } else { p.secondary },
+    );
+    painter.text(
+        inner.right_center(),
+        Align2::RIGHT_CENTER,
+        count.to_string(),
+        small,
+        p.muted,
+    );
+    response.on_hover_text(shapes)
 }
 
 fn section_label(ui: &mut egui::Ui, label: &str, p: Palette) {
