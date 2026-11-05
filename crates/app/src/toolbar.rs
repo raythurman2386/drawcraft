@@ -47,7 +47,6 @@ impl DrawCraftApp {
                     menu_edit(self, ui);
                     menu_view(self, ui);
                     menu_help(self, ui);
-                    self.shapes_menu(ui);
                     ui.add_space(8.0);
 
                     // Right cluster. Children are added right to left, so the
@@ -171,6 +170,31 @@ impl DrawCraftApp {
                         self.tool_button(ui, Tool::Line);
                         self.tool_button(ui, Tool::Arrow);
 
+                        section_label(ui, "SHAPES", p.muted);
+                        {
+                            let mut shape_tools = Vec::new();
+                            for kind in ShapeKind::GEOMETRIC {
+                                let Some(tool) = Tool::parse(kind.as_str()) else {
+                                    continue;
+                                };
+                                if matches!(tool, Tool::Note) {
+                                    continue;
+                                }
+                                shape_tools.push(tool);
+                            }
+                            for chunk in shape_tools.chunks(2) {
+                                ui.horizontal(|ui| {
+                                    let width = 77.0;
+                                    self.compact_tool_button(ui, chunk[0], width);
+                                    if let Some(tool) = chunk.get(1) {
+                                        self.compact_tool_button(ui, *tool, width);
+                                    } else {
+                                        ui.add_space(width);
+                                    }
+                                });
+                            }
+                        }
+
                         section_label(ui, "CONTENT", p.muted);
                         for chunk in [
                             &[Tool::Text, Tool::Sticky][..],
@@ -270,31 +294,6 @@ impl DrawCraftApp {
         if clicked {
             self.set_tool(tool);
         }
-    }
-
-    fn shapes_menu(&mut self, ui: &mut egui::Ui) {
-        let p = theme::palette(self.session.editor.view.dark);
-        ui.menu_button(
-            RichText::new("Shapes…")
-                .text_style(TextStyle::Button)
-                .color(p.secondary),
-            |ui| {
-                egui::ScrollArea::vertical()
-                    .max_height(430.0)
-                    .show(ui, |ui| {
-                        let mut kinds = ShapeKind::GEOMETRIC.to_vec();
-                        kinds.sort_by_key(|kind| kind.label());
-                        for kind in kinds {
-                            let Some(tool) = Tool::parse(kind.as_str()) else {
-                                continue;
-                            };
-                            if self.tool_button(ui, tool) {
-                                ui.close();
-                            }
-                        }
-                    });
-            },
-        );
     }
 
     pub(crate) fn status_bar(&mut self, ui: &mut egui::Ui) {

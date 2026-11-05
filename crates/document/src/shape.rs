@@ -79,7 +79,7 @@ impl ShapeKind {
         Self::Group,
     ];
 
-    /// The 20 geometric presets exposed in the shape menu.
+    /// The 20 geometric presets exposed in the tool rail.
     pub const GEOMETRIC: [Self; 20] = [
         Self::Rectangle,
         Self::Ellipse,
