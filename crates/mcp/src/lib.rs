@@ -512,4 +512,28 @@ mod tests {
         .unwrap_or(Value::Null);
         assert!(response.get("result").is_some());
     }
+
+    #[test]
+    fn lifecycle_commands_reach_session_through_mcp() {
+        let directory = tempfile::tempdir().unwrap_or_else(|_| panic!("temp dir"));
+        let mut session = Session::with_config_dir(directory.path().join("cfg"));
+        let response = handle_line(
+            &mut session,
+            r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"drawcraft_command","arguments":{"id":"session.autosave_now","params":{}}}}"#,
+        )
+        .unwrap_or(Value::Null);
+        assert!(response.get("result").is_some());
+        assert!(response.pointer("/result/isError").and_then(Value::as_bool) != Some(true));
+
+        let response = handle_line(
+            &mut session,
+            r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"drawcraft_command","arguments":{"id":"session.recover_list","params":{}}}}"#,
+        )
+        .unwrap_or(Value::Null);
+        let text = response
+            .pointer("/result/content/0/text")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(text.contains("candidates"), "{text}");
+    }
 }

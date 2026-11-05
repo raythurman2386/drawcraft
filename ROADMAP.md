@@ -28,14 +28,14 @@ v1 ships when all **P0** items below are complete and the quality gate is green:
 | --- | --- | --- |
 | Workspace / layers | ✅ | 10 crates, enforced by `xtask layers`; strict clippy; 70+ tests |
 | Document model | ✅ | records, styles, pages, validation, unknown-field preservation |
-| Command surface | ✅ | 56 commands; dispatch coverage test; CLI + MCP + UI share it |
+| Command surface | ✅ | 69 commands; editor + session dispatch coverage; CLI + MCP + UI share it |
 | Rendering | ✅ | shared scene; all 20 geometric shapes; text, images, arrowheads, patterns |
 | SVG export | ✅ | paths, dashes, text, clips, arrowheads, images |
 | PNG export | ✅ | resvg rasterisation, scale + transparency limits |
 | Tools | ✅ | select, hand, draw, highlighter, eraser, laser, line, polyline, arrow, text, sticky, image, frame, shapes |
 | Editing | 🟡 | move/resize/rotate/flip, duplicate, Alt-drag, snapping, group, lock, z-order, align, distribute, undo/redo, pages |
 | Arrows | 🟡 | binding + straight/bent/elbow + heads; vertex editing not yet |
-| Documents | 🟡 | save/open/recent; autosave/recovery/external-change pending |
+| Documents | ✅ | save/open/recent; autosave; crash recovery; external-change detection; atomic writes |
 | View | ✅ | pan, zoom, pinch, fit, minimap, dark, focus, grid |
 | WASM UI | 🟡 | core crates build; browser entry not wired |
 | `.tldr` interop | ❌ | planned for 1.1; format remains native and clean-room |
@@ -77,12 +77,13 @@ The interaction model must be complete before adding more surface area.
 
 ## Phase 4 — document lifecycle (P0)
 
-- [ ] **Autosave**: debounce, atomic write (temp + rename), configurable interval.
-- [ ] **Crash recovery**: recover the last autosave on launch, with a prompt and diff-free restore.
-- [ ] **External change detection**: poll mtime/hash; prompt to reload/overwrite; never silently clobber.
-- [ ] **Open Recent**: already in session; add UI, clear list, missing-file handling.
-- [ ] **Packed format decision**: keep single-file JSON with embedded images or move to a zip container (`.drawcraft` with manifest/assets). Decide before 1.0 and document migration.
-- [ ] **fuzz**: `format::from_json` and image decoding; corpus + CI job.
+- [x] **Autosave**: debounce, atomic write (temp + rename + fsync), configurable interval, background worker.
+- [x] **Crash recovery**: recover the last autosave on launch, with a prompt and diff-free restore.
+- [x] **External change detection**: poll mtime/hash; prompt to reload/overwrite; never silently clobber.
+- [x] **Open Recent**: UI with missing-file handling, Remove, and Clear recent.
+- [x] **Packed format decision**: keep single-file JSON v1 for v1; document v2 zip trigger + migration rule in `FORMAT.md` (no migration code yet).
+- [x] **fuzz**: `format::from_json` corpus + CI nightly 60 s job; stable corpus replay in `cargo test`.
+- [ ] **fuzz (image decode)**: deferred — decode lives in `crates/app` behind egui (`canvas.rs`); move a pure helper to a lower crate before adding a fuzz target.
 
 **Exit:** kill -9 during editing restores work; external edit is detected; fuzz corpus clean.
 

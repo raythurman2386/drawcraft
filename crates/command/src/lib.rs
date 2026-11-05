@@ -32,7 +32,19 @@ pub mod ids {
     pub const FILE_EXPORT_SVG: &str = "file.export_svg";
     pub const FILE_EXPORT_PNG: &str = "file.export_png";
     pub const DOC_RECENT: &str = "doc.recent";
+    pub const DOC_RECENT_CLEAR: &str = "doc.recent_clear";
+    pub const DOC_RECENT_REMOVE: &str = "doc.recent_remove";
     pub const DOC_INFO: &str = "doc.info";
+
+    // Session lifecycle (autosave, recovery, external change).
+    pub const SESSION_AUTOSAVE_STATUS: &str = "session.autosave_status";
+    pub const SESSION_AUTOSAVE_SET: &str = "session.autosave_set";
+    pub const SESSION_AUTOSAVE_NOW: &str = "session.autosave_now";
+    pub const SESSION_RECOVER_LIST: &str = "session.recover_list";
+    pub const SESSION_RECOVER: &str = "session.recover";
+    pub const SESSION_EXTERNAL_CHECK: &str = "session.external_check";
+    pub const SESSION_RELOAD: &str = "session.reload";
+    pub const SESSION_KEEP_MINE: &str = "session.keep_mine";
 
     // History / clipboard.
     pub const EDIT_UNDO: &str = "edit.undo";

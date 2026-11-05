@@ -97,8 +97,13 @@ Other tasks: `xtask fmt`, `clippy`, `test`, `build`, `wasm`, `bundle`, `layers`,
 - Undo: `crates/editor/src/history.rs`
 - Scene building and shape paths: `crates/render/src/{scene,shapes}.rs`
 - SVG/PNG: `crates/render/src/{svg,png}.rs`
-- Atomic save and export: `crates/format/src/lib.rs`
+- Atomic save and export: `crates/format/src/lib.rs` (`write_atomic`)
 - File/session commands: `crates/session/src/lib.rs`
+- Autosave worker: `crates/session/src/autosave.rs`
+- Crash recovery: `crates/session/src/recovery.rs`
+- External-change fingerprints: `crates/session/src/watch.rs`
+- Recovery / external-change prompts: `crates/app/src/lifecycle.rs`
+- Fuzz target (`from_json`): `fuzz/` (own workspace; `xtask fuzz`)
 - MCP protocol: `crates/mcp/src/lib.rs`
 - Canvas gestures: `crates/app/src/canvas.rs`
 - Top bar, tool rail, and status bar: `crates/app/src/toolbar.rs`
@@ -111,7 +116,7 @@ Other tasks: `xtask fmt`, `clippy`, `test`, `build`, `wasm`, `bundle`, `layers`,
 
 - Line/polyline vertex dragging is not implemented yet; points are stored and routed but not edited by handles.
 - Frame membership (`parent_id`) clips when set, but the UI does not yet move shapes into frames automatically.
-- Autosave, crash recovery, and external-change detection are roadmap items, not implemented.
+- Autosave, crash recovery, and external-change detection are implemented (see `crates/session/{autosave,recovery,watch}.rs` and `crates/app/src/lifecycle.rs`). Image-decode fuzz remains open (decode still lives in the app crate).
 - `.tldr` interoperability is not implemented. Keep the format native and clean-room.
 - The browser/WASM UI entry point is not wired yet; the core crates build for `wasm32-unknown-unknown`.
 

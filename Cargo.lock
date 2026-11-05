@@ -913,6 +913,7 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -973,6 +974,7 @@ dependencies = [
  "drawcraft-session",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
 ]
 

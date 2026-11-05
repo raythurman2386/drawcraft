@@ -1,0 +1,7 @@
+target
+artifacts
+# Keep curated seed corpus; ignore libFuzzer growth (hash-named files).
+corpus/from_json/*
+!corpus/from_json/*.json
+!corpus/from_json/*.txt
+!corpus/from_json/*.bin

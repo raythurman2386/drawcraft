@@ -144,7 +144,35 @@ impl CommandDef {
 const NONE: &[ParamDef] = &[];
 
 const P_PATH: &[ParamDef] = &[ParamDef::required("path", "File path", ParamKind::String)];
-const P_PATH_OPTIONAL: &[ParamDef] = &[ParamDef::optional("path", "File path", ParamKind::String)];
+const P_CONFIRM: &[ParamDef] = &[ParamDef::optional(
+    "confirm",
+    "Continue despite unsaved changes (keeps recovery autosave)",
+    ParamKind::Boolean,
+)];
+const P_OPEN: &[ParamDef] = &[
+    ParamDef::required("path", "File path", ParamKind::String),
+    ParamDef::optional(
+        "confirm",
+        "Continue despite unsaved changes (keeps recovery autosave)",
+        ParamKind::Boolean,
+    ),
+];
+const P_SAVE: &[ParamDef] = &[
+    ParamDef::optional("path", "File path", ParamKind::String),
+    ParamDef::optional(
+        "force",
+        "Overwrite despite external change",
+        ParamKind::Boolean,
+    ),
+];
+const P_SAVE_AS: &[ParamDef] = &[
+    ParamDef::required("path", "File path", ParamKind::String),
+    ParamDef::optional(
+        "force",
+        "Overwrite despite external change",
+        ParamKind::Boolean,
+    ),
+];
 const P_EXPORT_SVG: &[ParamDef] = &[
     ParamDef::required("path", "Output path", ParamKind::String),
     ParamDef::optional(
@@ -164,6 +192,24 @@ const P_EXPORT_PNG: &[ParamDef] = &[
     ParamDef::optional("scale", "Pixel scale", ParamKind::Number),
     ParamDef::optional("transparent", "Transparent background", ParamKind::Boolean),
 ];
+const P_AUTOSAVE_SET: &[ParamDef] = &[
+    ParamDef::optional("enabled", "Enable autosave", ParamKind::Boolean),
+    ParamDef::optional("interval_ms", "Autosave interval (ms)", ParamKind::Integer),
+];
+const RECOVER_ACTIONS: &[&str] = &["restore", "discard"];
+const P_RECOVER: &[ParamDef] = &[
+    ParamDef::required(
+        "action",
+        "Recovery action",
+        ParamKind::Enum(RECOVER_ACTIONS),
+    ),
+    ParamDef::optional("autosave", "Autosave path", ParamKind::String),
+];
+const P_RELOAD: &[ParamDef] = &[ParamDef::optional(
+    "force",
+    "Discard dirty edits",
+    ParamKind::Boolean,
+)];
 
 const AXIS: &[&str] = &["horizontal", "vertical"];
 const ALIGN: &[&str] = &["left", "center", "right", "top", "middle", "bottom"];
@@ -264,23 +310,23 @@ pub fn commands() -> &'static [CommandDef] {
     &COMMANDS
 }
 
-static COMMANDS: [CommandDef; 59] = [
+static COMMANDS: [CommandDef; 69] = [
     // ---- File & document -------------------------------------------------
     cmd(
         ids::FILE_NEW,
         "New document",
-        "Discard the current document and start a blank page.",
+        "Start a blank page. Pass confirm=true when the current document is dirty; recovery autosave is kept.",
         Category::File,
         Scope::Session,
-        NONE,
+        P_CONFIRM,
     ),
     cmd(
         ids::FILE_OPEN,
         "Open document",
-        "Open a .drawcraft file from disk.",
+        "Open a .drawcraft file from disk. Pass confirm=true when the current document is dirty; recovery autosave is kept.",
         Category::File,
         Scope::Session,
-        P_PATH,
+        P_OPEN,
     ),
     cmd(
         ids::FILE_SAVE,
@@ -288,7 +334,7 @@ static COMMANDS: [CommandDef; 59] = [
         "Save to the current path (or the supplied path).",
         Category::File,
         Scope::Session,
-        P_PATH_OPTIONAL,
+        P_SAVE,
     ),
     cmd(
         ids::FILE_SAVE_AS,
@@ -296,7 +342,7 @@ static COMMANDS: [CommandDef; 59] = [
         "Save the document to a new path.",
         Category::File,
         Scope::Session,
-        P_PATH,
+        P_SAVE_AS,
     ),
     cmd(
         ids::FILE_EXPORT_SVG,
@@ -323,9 +369,89 @@ static COMMANDS: [CommandDef; 59] = [
         NONE,
     ),
     cmd(
+        ids::DOC_RECENT_CLEAR,
+        "Clear recent documents",
+        "Remove every entry from the recent documents list.",
+        Category::File,
+        Scope::Session,
+        NONE,
+    ),
+    cmd(
+        ids::DOC_RECENT_REMOVE,
+        "Remove recent document",
+        "Remove one path from the recent documents list.",
+        Category::File,
+        Scope::Session,
+        P_PATH,
+    ),
+    cmd(
         ids::DOC_INFO,
         "Document info",
         "Return path, dirty state, page count, and selection summary.",
+        Category::File,
+        Scope::Session,
+        NONE,
+    ),
+    cmd(
+        ids::SESSION_AUTOSAVE_STATUS,
+        "Autosave status",
+        "Report autosave enabled state, interval, path, and pending work.",
+        Category::File,
+        Scope::Session,
+        NONE,
+    ),
+    cmd(
+        ids::SESSION_AUTOSAVE_SET,
+        "Configure autosave",
+        "Enable or disable autosave and set the debounce interval.",
+        Category::File,
+        Scope::Session,
+        P_AUTOSAVE_SET,
+    ),
+    cmd(
+        ids::SESSION_AUTOSAVE_NOW,
+        "Autosave now",
+        "Write the current document to its autosave path synchronously.",
+        Category::File,
+        Scope::Session,
+        NONE,
+    ),
+    cmd(
+        ids::SESSION_RECOVER_LIST,
+        "List recovery candidates",
+        "List autosaves that are newer than and differ from their source files.",
+        Category::File,
+        Scope::Session,
+        NONE,
+    ),
+    cmd(
+        ids::SESSION_RECOVER,
+        "Recover autosave",
+        "Restore or discard a recovery candidate.",
+        Category::File,
+        Scope::Session,
+        P_RECOVER,
+    ),
+    cmd(
+        ids::SESSION_EXTERNAL_CHECK,
+        "Check external change",
+        "Report whether the on-disk file changed since the last open or save.",
+        Category::File,
+        Scope::Session,
+        NONE,
+    ),
+    cmd(
+        ids::SESSION_RELOAD,
+        "Reload from disk",
+        "Reload the current path from disk, optionally discarding dirty edits.",
+        Category::File,
+        Scope::Session,
+        P_RELOAD,
+    ),
+    cmd(
+        ids::SESSION_KEEP_MINE,
+        "Keep mine",
+        "Accept the current disk fingerprint as the baseline and keep local edits.",
         Category::File,
         Scope::Session,
         NONE,

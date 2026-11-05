@@ -6,6 +6,10 @@ All notable changes to DrawCraft are documented here.
 
 ### Added
 
+- Document lifecycle (Phase 4): debounced autosave with background worker, crash recovery (`session.recover_list` / `session.recover`), external-change detection (`session.external_check` / `session.reload` / `session.keep_mine`), atomic `format::write_atomic`, Open Recent missing-file handling + clear/remove, recovery and external-change prompts in the desktop UI.
+- `format::from_json` fuzz target under `fuzz/` with seed corpus, stable corpus replay test, `xtask fuzz`, and CI nightly 60 s fuzz job.
+- Shapes in the left tool rail with shortcuts (PR #6).
+- Transform modifiers + live readout: Shift aspect lock, Alt centre scale, Shift 15° rotate snap (PR #7 / t2041u).
 - Lasso selection tool (`Tool::Lasso`, shortcut Q) and `edit.select_lasso` command (fully-contained bounds: true containment, so a concave lasso that notches into a shape does not select it).
 - `edit.select_first` / `edit.select_last` select bottommost / topmost unlocked shapes by z-order.
 - One group-level shift rule for click, marquee, and lasso (groups are atomic toggle units).

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "active_page": "page-1",
+  "pages": [{
+    "id": "page-1",
+    "name": "Page 1",
+    "shapes": [
+      {"id": "s1", "kind": "rectangle", "pos": {"x": 0, "y": 0}, "size": {"x": 10, "y": 10}},
+      {"id": "s2", "kind": "ellipse", "pos": {"x": 20, "y": 0}, "size": {"x": 10, "y": 10}},
+      {"id": "s3", "kind": "triangle", "pos": {"x": 40, "y": 0}, "size": {"x": 10, "y": 10}},
+      {"id": "s4", "kind": "text", "pos": {"x": 60, "y": 0}, "size": {"x": 40, "y": 20}, "text": "hi"},
+      {"id": "s5", "kind": "sticky", "pos": {"x": 0, "y": 40}, "size": {"x": 40, "y": 40}, "text": "note"},
+      {"id": "s6", "kind": "arrow", "pos": {"x": 0, "y": 100}, "size": {"x": 50, "y": 10}, "points": [{"x": 0, "y": 100}, {"x": 50, "y": 110}]},
+      {"id": "s7", "kind": "line", "pos": {"x": 0, "y": 120}, "size": {"x": 50, "y": 0}, "points": [{"x": 0, "y": 120}, {"x": 50, "y": 120}]},
+      {"id": "s8", "kind": "frame", "pos": {"x": 100, "y": 0}, "size": {"x": 80, "y": 80}}
+    ]
+  }],
+  "meta": {}
+}

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "active_page": "page-1",
+  "pages": [{
+    "id": "page-1",
+    "name": "Page 1",
+    "shapes": [],
+    "future_page_field": {"kept": true}
+  }],
+  "meta": {"author": "fuzz"},
+  "future_top_level": [1, 2, 3]
+}

@@ -161,6 +161,42 @@ Image records store a `src` string. Supported sources:
 
 The renderer caps decoded images to 8192×8192 and 32 MiB. The document loader caps the whole file to 16 MiB.
 
+## Container decision
+
+**v1 keeps the single-file UTF-8 JSON container** (format version 1). Reasons visible in the code today:
+
+- readable diffs and easy agent inspection;
+- unknown-field preservation is JSON-native at every level;
+- one parser surface for load, save, autosave, and fuzz (`format::from_json`);
+- no new archive dependency.
+
+Trade-off: base64-embedded images count against the 16 MiB `MAX_BYTES` loader cap.
+
+**v2 zip trigger:** move to a zip container (manifest + asset files) when either (a) typical boards regularly exceed the 16 MiB JSON cap because of embedded images, or (b) we need streaming/partial asset load. Migration rule when that lands: readers accept both containers; writers opt in to zip (default stays JSON until a later release). No migration code ships in this slice.
+
+## Autosave files
+
+Autosaves live under the session config directory (honours `XDG_CONFIG_HOME`, else `APPDATA`, else `~/.config`):
+
+```
+<config>/drawcraft/autosave/<key>.drawcraft
+<config>/drawcraft/autosave/<key>.drawcraft.meta.json
+```
+
+- `<key>` is a stable FNV-1a hash of the canonical source path, or `untitled-<session-id>` for unsaved documents.
+- The `.drawcraft` file is a normal v1 document written with `format::write_atomic`.
+- The sidecar JSON records:
+
+| Field | Meaning |
+| --- | --- |
+| `source_path` | Original path, or null for untitled |
+| `source_mtime` / `source_len` / `source_hash` | Disk fingerprint at autosave time |
+| `revision` | Session edit counter |
+| `saved_at` | Unix seconds |
+| `session_id` | Process-local session id |
+
+Recovery keeps an autosave when it is newer than the source mtime and its document content differs. Equal content is discarded silently (also clears a stale background write after a successful save).
+
 ## Interoperability
 
 `.drawcraft` is the native format. A clean-room `.tldr` reader/writer is planned for v1.1; it is not part of format v1 and no copied tldraw code or assets are used.

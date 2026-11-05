@@ -35,6 +35,7 @@ fn dispatch(command: &str, args: &[String]) -> Result<()> {
         "bundle" => bundle(),
         "layers" | "check-layers" => check_layers(),
         "commands" | "check-commands" => check_commands(),
+        "fuzz" => fuzz(args),
         "check" | "all" => {
             run_cargo(&["fmt", "--all", "--", "--check"])?;
             run_cargo(&[
@@ -59,7 +60,7 @@ fn dispatch(command: &str, args: &[String]) -> Result<()> {
         }
         "help" | "--help" | "-h" => {
             println!(
-                "xtask: fmt | clippy | test | build | wasm | bundle | layers | commands | check | all"
+                "xtask: fmt | clippy | test | build | wasm | bundle | layers | commands | fuzz [secs] | check | all"
             );
             Ok(())
         }
@@ -211,7 +212,70 @@ fn check_commands() -> Result<()> {
         "--lib",
         "every_editor_command_is_handled_by_dispatch",
         "--",
+    ])?;
+    run_cargo(&[
+        "test",
+        "-p",
+        "drawcraft-session",
+        "--lib",
+        "every_session_command_is_handled_by_execute",
+        "--",
     ])
+}
+
+fn fuzz(args: &[String]) -> Result<()> {
+    let secs = args
+        .first()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(30);
+    let root = workspace_root()?;
+    let fuzz_dir = root.join("fuzz");
+    if !fuzz_dir.is_dir() {
+        return Err("fuzz/ directory missing".into());
+    }
+    let nightly = Command::new("rustup")
+        .args(["run", "nightly", "rustc", "--version"])
+        .status();
+    if !matches!(nightly, Ok(status) if status.success()) {
+        return Err(
+            "xtask fuzz requires the nightly toolchain (rustup toolchain install nightly)".into(),
+        );
+    }
+    let cargo_fuzz = Command::new("cargo")
+        .args(["+nightly", "fuzz", "-V"])
+        .status();
+    if !matches!(cargo_fuzz, Ok(status) if status.success()) {
+        return Err("xtask fuzz requires cargo-fuzz (cargo install cargo-fuzz --locked)".into());
+    }
+    // cargo-fuzz defaults --target to its own compile-time triple. Musl-static
+    // installs (e.g. cargo-binstall / taiki-e) would otherwise try ASAN+musl.
+    let host = nightly_host_triple()?;
+    let max_total_time = format!("-max_total_time={secs}");
+    let mut command = Command::new("cargo");
+    command.current_dir(&fuzz_dir).args([
+        "+nightly",
+        "fuzz",
+        "run",
+        "from_json",
+        "--target",
+        &host,
+        "--",
+        &max_total_time,
+    ]);
+    status(command)
+}
+
+fn nightly_host_triple() -> Result<String> {
+    let output = Command::new("rustup")
+        .args(["run", "nightly", "rustc", "-vV"])
+        .output()?;
+    if !output.status.success() {
+        return Err("failed to query nightly rustc host triple".into());
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    text.lines()
+        .find_map(|line| line.strip_prefix("host: ").map(str::to_owned))
+        .ok_or_else(|| "nightly rustc -vV missing host line".into())
 }
 
 fn wasm() -> Result<()> {
