@@ -232,10 +232,10 @@ impl Editor {
         Ok(id)
     }
 
-    /// Add an arrow and optionally bind each endpoint to the topmost shape.
+    /// Add an arrow and optionally bind each endpoint to the topmost bindable shape.
     pub fn add_arrow_between(&mut self, start: Vec2, end: Vec2, bind: bool) -> Result<ShapeId> {
-        let start_target = bind.then(|| self.topmost_at(start, 1.0)).flatten();
-        let end_target = bind.then(|| self.topmost_at(end, 1.0)).flatten();
+        let start_target = bind.then(|| self.topmost_bindable_at(start, 1.0)).flatten();
+        let end_target = bind.then(|| self.topmost_bindable_at(end, 1.0)).flatten();
         let id = self.next_shape_id();
         let mut shape = ShapeRecord::new(
             id.clone(),
@@ -317,6 +317,37 @@ impl Editor {
             .filter(|shape| shape.hit_test(point, tolerance))
             .max_by_key(|shape| (shape.z, &shape.id))
             .map(|shape| shape.id.clone())
+    }
+
+    /// Topmost unlocked non-linear shape under a point (arrow bind / snap target).
+    ///
+    /// Linear shapes (arrows, lines, draw strokes, polylines) are skipped so
+    /// preview snap and commit binding agree: binding uses edge hit-tests that
+    /// rarely land on a linear bbox edge the preview would otherwise snap to.
+    #[must_use]
+    pub fn topmost_bindable_at(&self, point: Vec2, tolerance: f64) -> Option<ShapeId> {
+        self.doc
+            .active()
+            .into_iter()
+            .flat_map(|page| page.shapes.iter())
+            .filter(|shape| !shape.locked)
+            .filter(|shape| !shape.kind.is_linear())
+            .filter(|shape| shape.hit_test(point, tolerance))
+            .max_by_key(|shape| (shape.z, &shape.id))
+            .map(|shape| shape.id.clone())
+    }
+
+    /// Snap arrow drag endpoints the same way [`Self::refresh_arrows`] does once
+    /// bindings are known (center-to-center when both ends bind).
+    #[must_use]
+    pub fn arrow_endpoints_for_drag(&self, start: Vec2, end: Vec2, tolerance: f64) -> (Vec2, Vec2) {
+        let start_rect = self
+            .topmost_bindable_at(start, tolerance)
+            .and_then(|id| self.doc.shape(&id).map(ShapeRecord::rect));
+        let end_rect = self
+            .topmost_bindable_at(end, tolerance)
+            .and_then(|id| self.doc.shape(&id).map(ShapeRecord::rect));
+        resolve_arrow_endpoints(start, end, start_rect, end_rect)
     }
 
     /// Select what is under the pointer, expanding to the whole group.
@@ -1143,14 +1174,7 @@ impl Editor {
                 .as_ref()
                 .and_then(|id| anchors.get(id))
                 .map(|(rect, _)| *rect);
-            if let Some(rect) = start_rect {
-                let toward = end_rect.map_or(end, |rect| rect.center());
-                start = rect_anchor(rect, toward);
-            }
-            if let Some(rect) = end_rect {
-                let toward = start_rect.map_or(start, |rect| rect.center());
-                end = rect_anchor(rect, toward);
-            }
+            (start, end) = resolve_arrow_endpoints(start, end, start_rect, end_rect);
             let points = match shape.arrow_style() {
                 ArrowStyle::Straight => vec![start, end],
                 ArrowStyle::Bent => {
@@ -1391,6 +1415,43 @@ impl Editor {
     }
 }
 
+/// Minimum drag length (world units) required to commit an Arrow/Line create.
+pub const LINEAR_CREATE_MIN_LENGTH: f64 = 3.0;
+
+/// Whether an Arrow/Line create drag is long enough to commit.
+///
+/// Gates on drag length rather than bounding-box width AND height so
+/// axis-aligned (horizontal/vertical) drags are not dropped.
+#[must_use]
+pub fn linear_create_drag_commits(start: Vec2, current: Vec2) -> bool {
+    start.distance(current) >= LINEAR_CREATE_MIN_LENGTH
+}
+
+/// Resolve arrow endpoints the same way bound arrows are refreshed.
+///
+/// When both ends have target rects, each end anchors toward the *other*
+/// rect's center (center-to-center). With only one bound end, that end
+/// anchors toward the free endpoint.
+#[must_use]
+pub fn resolve_arrow_endpoints(
+    start: Vec2,
+    end: Vec2,
+    start_rect: Option<Rect>,
+    end_rect: Option<Rect>,
+) -> (Vec2, Vec2) {
+    let mut start = start;
+    let mut end = end;
+    if let Some(rect) = start_rect {
+        let toward = end_rect.map_or(end, Rect::center);
+        start = rect_anchor(rect, toward);
+    }
+    if let Some(rect) = end_rect {
+        let toward = start_rect.map_or(start, Rect::center);
+        end = rect_anchor(rect, toward);
+    }
+    (start, end)
+}
+
 /// Theme-aware default ink for newly created shapes.
 #[must_use]
 pub fn default_style_for(kind: ShapeKind, dark: bool) -> Style {
@@ -1479,5 +1540,118 @@ mod tests {
         assert_eq!(default_style(ShapeKind::Sticky).fill, Fill::Full);
         assert_eq!(default_style(ShapeKind::Arrow).fill, Fill::None);
         assert!(default_style(ShapeKind::Highlighter).opacity < 1.0);
+    }
+
+    #[test]
+    fn linear_create_gate_accepts_axis_aligned_drags() {
+        let start = Vec2::new(0.0, 50.0);
+        let horizontal = Vec2::new(100.0, 50.0);
+        let vertical = Vec2::new(0.0, 150.0);
+        let tiny = Vec2::new(1.0, 50.0);
+
+        assert!(linear_create_drag_commits(start, horizontal));
+        assert!(linear_create_drag_commits(start, vertical));
+        assert!(!linear_create_drag_commits(start, tiny));
+        assert!(!linear_create_drag_commits(start, start));
+
+        // Old width&&height gate would reject these (height or width ~0).
+        let hz = Rect::new(start, horizontal);
+        let vt = Rect::new(start, vertical);
+        assert!(hz.height() < LINEAR_CREATE_MIN_LENGTH);
+        assert!(vt.width() < LINEAR_CREATE_MIN_LENGTH);
+        assert!(
+            !(hz.width() >= LINEAR_CREATE_MIN_LENGTH && hz.height() >= LINEAR_CREATE_MIN_LENGTH),
+            "old width&&height gate must reject the horizontal drag this length gate accepts"
+        );
+        assert!(
+            !(vt.width() >= LINEAR_CREATE_MIN_LENGTH && vt.height() >= LINEAR_CREATE_MIN_LENGTH),
+            "old width&&height gate must reject the vertical drag this length gate accepts"
+        );
+    }
+
+    #[test]
+    fn both_bound_arrow_endpoints_are_center_to_center() {
+        let left = Rect::from_xywh(0.0, 0.0, 100.0, 100.0);
+        let right = Rect::from_xywh(300.0, 0.0, 100.0, 100.0);
+        // Raw pointer hits near opposite corners; resolver must still go center-to-center.
+        let (start, end) = resolve_arrow_endpoints(
+            Vec2::new(90.0, 10.0),
+            Vec2::new(310.0, 90.0),
+            Some(left),
+            Some(right),
+        );
+        let expected_start = rect_anchor(left, right.center());
+        let expected_end = rect_anchor(right, left.center());
+        assert!((start - expected_start).length() < 1e-9);
+        assert!((end - expected_end).length() < 1e-9);
+    }
+
+    #[test]
+    fn horizontal_arrow_create_path_commits_and_binds() {
+        let mut editor = Editor::new();
+        let left = editor
+            .add_shape(
+                ShapeKind::Rectangle,
+                Rect::from_xywh(0.0, 0.0, 100.0, 100.0),
+                "",
+            )
+            .expect("left");
+        let right = editor
+            .add_shape(
+                ShapeKind::Rectangle,
+                Rect::from_xywh(300.0, 0.0, 100.0, 100.0),
+                "",
+            )
+            .expect("right");
+        let start = Vec2::new(100.0, 50.0);
+        let end = Vec2::new(300.0, 50.0);
+        assert!(
+            linear_create_drag_commits(start, end),
+            "axis-aligned arrow drag must pass the create gate"
+        );
+        let preview = editor.arrow_endpoints_for_drag(start, end, 12.0);
+        let arrow = editor
+            .add_arrow_between(preview.0, preview.1, true)
+            .expect("arrow");
+        let shape = editor.doc.shape(&arrow).expect("arrow shape");
+        assert_eq!(shape.arrow_start.as_ref(), Some(&left));
+        assert_eq!(shape.arrow_end.as_ref(), Some(&right));
+        let committed = shape.endpoints();
+        assert!(
+            (committed.0 - preview.0).length() < 1e-6,
+            "preview start must match committed start; preview={preview:?} committed={committed:?}"
+        );
+        assert!(
+            (committed.1 - preview.1).length() < 1e-6,
+            "preview end must match committed end; preview={preview:?} committed={committed:?}"
+        );
+    }
+
+    #[test]
+    fn arrow_snap_skips_linear_shapes() {
+        let mut editor = Editor::new();
+        let rect = editor
+            .add_shape(
+                ShapeKind::Rectangle,
+                Rect::from_xywh(0.0, 0.0, 100.0, 100.0),
+                "",
+            )
+            .expect("rect");
+        let _line = editor
+            .add_shape(
+                ShapeKind::Line,
+                Rect::from_xywh(200.0, 40.0, 100.0, 20.0),
+                "",
+            )
+            .expect("line");
+        // Point on the line's bbox; bindable lookup must ignore the line.
+        let on_line = Vec2::new(250.0, 50.0);
+        assert!(editor.topmost_at(on_line, 12.0).is_some());
+        assert!(editor.topmost_bindable_at(on_line, 12.0).is_none());
+        let on_rect = Vec2::new(50.0, 50.0);
+        assert_eq!(
+            editor.topmost_bindable_at(on_rect, 12.0).as_ref(),
+            Some(&rect)
+        );
     }
 }

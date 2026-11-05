@@ -432,4 +432,50 @@ mod tests {
         let scene = build_scene(page, Some(&[ShapeId::generated(2)]));
         assert_eq!(scene.items.len(), 1);
     }
+
+    #[test]
+    fn solid_line_emits_a_stroke() {
+        let mut document = Document::new();
+        let shape = ShapeRecord::new(
+            ShapeId::from("line-1"),
+            ShapeKind::Line,
+            Vec2::new(0.0, 0.0),
+            Vec2::new(100.0, 50.0),
+        )
+        .with_points(vec![Vec2::new(0.0, 0.0), Vec2::new(100.0, 50.0)]);
+        let _ = document.add_shape(shape);
+        let fallback = Page::new("p".into(), "p");
+        let scene = build_scene(document.active().unwrap_or(&fallback), None);
+        assert_eq!(scene.items.len(), 1);
+        assert!(
+            !scene.items[0].strokes.is_empty(),
+            "a solid line must emit a stroke"
+        );
+    }
+
+    #[test]
+    fn polyline_emits_stroke_through_all_points() {
+        let mut document = Document::new();
+        let shape = ShapeRecord::new(
+            ShapeId::from("poly-1"),
+            ShapeKind::Polyline,
+            Vec2::ZERO,
+            Vec2::new(100.0, 50.0),
+        )
+        .with_points(vec![
+            Vec2::new(0.0, 0.0),
+            Vec2::new(50.0, 50.0),
+            Vec2::new(100.0, 0.0),
+        ]);
+        let _ = document.add_shape(shape);
+        let fallback = Page::new("p".into(), "p");
+        let scene = build_scene(document.active().unwrap_or(&fallback), None);
+        assert_eq!(scene.items.len(), 1);
+        assert!(!scene.items[0].strokes.is_empty());
+        let points = &scene.items[0].strokes[0].path.flatten(16);
+        assert!(
+            points.len() >= 3,
+            "a polyline stroke must pass through all its vertices"
+        );
+    }
 }

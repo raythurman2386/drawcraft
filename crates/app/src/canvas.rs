@@ -1,6 +1,6 @@
 use base64::Engine as _;
 use drawcraft_document::{Dash, Rect as DocRect, ShapeId, ShapeKind, ShapeRecord, Vec2};
-use drawcraft_editor::{Tool, default_style_for};
+use drawcraft_editor::{Tool, default_style_for, linear_create_drag_commits};
 use drawcraft_geometry::Camera;
 use drawcraft_render::{Path, TextAlign, build_scene, triangulate};
 use egui::{
@@ -272,7 +272,10 @@ impl DrawCraftApp {
             return;
         }
 
-        if matches!(tool, Tool::Draw | Tool::Highlighter | Tool::Laser) {
+        if matches!(
+            tool,
+            Tool::Draw | Tool::Highlighter | Tool::Laser | Tool::Polyline
+        ) {
             self.state.drag = Some(DragState::Freehand {
                 tool,
                 points: vec![world],
@@ -280,7 +283,7 @@ impl DrawCraftApp {
             return;
         }
 
-        if tool.is_shape_tool() || matches!(tool, Tool::Arrow | Tool::Line | Tool::Polyline) {
+        if tool.is_shape_tool() || matches!(tool, Tool::Arrow | Tool::Line) {
             self.state.drag = Some(DragState::Create {
                 tool,
                 start: world,
@@ -366,6 +369,15 @@ impl DrawCraftApp {
         self.state.drag = Some(drag);
     }
 
+    /// Snap arrow drag endpoints via the shared editor resolver (preview == commit).
+    #[must_use]
+    fn arrow_preview_endpoints(&self, start: Vec2, current: Vec2, zoom: f64) -> (Vec2, Vec2) {
+        let tolerance = 12.0 / zoom.max(0.1);
+        self.session
+            .editor
+            .arrow_endpoints_for_drag(start, current, tolerance)
+    }
+
     fn finish_drag(&mut self, _ui: &egui::Ui, world: Vec2) {
         let Some(drag) = self.state.drag.take() else {
             return;
@@ -391,15 +403,34 @@ impl DrawCraftApp {
                 start,
                 current,
             } => {
-                let rect = DocRect::new(start, current);
-                if rect.width() < 3.0 || rect.height() < 3.0 {
-                    let rect = default_rect(tool, start);
-                    self.create_with_tool(tool, rect, Some(current));
-                } else if tool == Tool::Arrow {
-                    let _ = self.session.editor.add_arrow_between(start, current, true);
-                } else if matches!(tool, Tool::Line | Tool::Polyline) {
-                    self.create_linear(tool, start, current);
+                // Polyline starts DragState::Freehand, so only Arrow|Line land here.
+                if matches!(tool, Tool::Arrow | Tool::Line) {
+                    // Linear tools are placed by dragging. Gate on drag length so
+                    // axis-aligned (horizontal/vertical) strokes still commit.
+                    // Ignore accidental tiny drags; never fall back to a default box.
+                    if linear_create_drag_commits(start, current) {
+                        if tool == Tool::Arrow {
+                            let (start_snapped, end_snapped) = self.arrow_preview_endpoints(
+                                start,
+                                current,
+                                self.session.editor.camera.zoom,
+                            );
+                            let _ = self.session.editor.add_arrow_between(
+                                start_snapped,
+                                end_snapped,
+                                true,
+                            );
+                        } else {
+                            self.create_linear(tool, start, current);
+                        }
+                    }
                 } else {
+                    let rect = DocRect::new(start, current);
+                    let rect = if rect.width() < 3.0 || rect.height() < 3.0 {
+                        default_rect(tool, start)
+                    } else {
+                        rect
+                    };
                     self.create_with_tool(tool, rect, Some(current));
                 }
             }
@@ -454,8 +485,9 @@ impl DrawCraftApp {
             Tool::Lasso => {}
             Tool::Hand => {}
             _ => {
-                if tool.is_shape_tool() || matches!(tool, Tool::Arrow | Tool::Line | Tool::Polyline)
-                {
+                // Drag-based linear tools (Arrow, Line) and freehand tools that
+                // reach this arm (Polyline) are not placed by a single click.
+                if tool.is_shape_tool() && !tool.is_linear_tool() {
                     let rect = default_rect(tool, world);
                     self.create_with_tool(tool, rect, None);
                 }
@@ -488,8 +520,10 @@ impl DrawCraftApp {
         if kind == ShapeKind::Text {
             shape.text = "Text".into();
         }
-        if matches!(kind, ShapeKind::Sticky | ShapeKind::Note) {
+        if kind == ShapeKind::Note {
             shape.text = "Note".into();
+        } else if kind == ShapeKind::Sticky {
+            shape.text = "Sticky".into();
         }
         if kind == ShapeKind::Frame {
             shape.style.fill = drawcraft_document::Fill::None;
@@ -538,6 +572,7 @@ impl DrawCraftApp {
     fn create_freehand(&mut self, tool: Tool, points: Vec<Vec2>) {
         let kind = match tool {
             Tool::Highlighter => ShapeKind::Highlighter,
+            Tool::Polyline => ShapeKind::Polyline,
             _ => ShapeKind::Draw,
         };
         let id = self.session.editor.next_shape_id();
@@ -720,20 +755,58 @@ impl DrawCraftApp {
         }
 
         if let Some(DragState::Create {
-            tool: _,
+            tool,
             start,
             current,
         }) = &self.state.drag
         {
-            let rect = DocRect::new(*start, *current);
-            let screen = view.rect(rect);
-            painter.rect_stroke(
-                screen,
-                CornerRadius::same(2),
-                Stroke::new(1.5, colors.selection),
-                StrokeKind::Inside,
-            );
-            painter.rect_filled(screen, 0.0, colors.marquee_fill);
+            let start_screen = view.pos(*start);
+            let current_screen = view.pos(*current);
+            match tool {
+                Tool::Line => {
+                    painter.add(egui::Shape::line(
+                        vec![start_screen, current_screen],
+                        Stroke::new(2.0, colors.selection),
+                    ));
+                }
+                Tool::Arrow => {
+                    let (start_snapped, end_snapped) =
+                        self.arrow_preview_endpoints(*start, *current, view.camera.zoom);
+                    let start_screen = view.pos(start_snapped);
+                    let end_screen = view.pos(end_snapped);
+                    painter.add(egui::Shape::line(
+                        vec![start_screen, end_screen],
+                        Stroke::new(2.0, colors.selection),
+                    ));
+                    let direction = (end_snapped - start_snapped).normalized();
+                    if direction.length_squared() > f64::EPSILON {
+                        let normal = direction.perp();
+                        let size = 10.0 / view.camera.zoom.max(0.1);
+                        let back = end_snapped - direction * size;
+                        let half = size * 0.5;
+                        painter.add(egui::Shape::convex_polygon(
+                            vec![
+                                view.pos(end_snapped),
+                                view.pos(back + normal * half),
+                                view.pos(back - normal * half),
+                            ],
+                            colors.selection,
+                            Stroke::new(1.0, colors.selection),
+                        ));
+                    }
+                }
+                _ => {
+                    let rect = DocRect::new(*start, *current);
+                    let screen = view.rect(rect);
+                    painter.rect_stroke(
+                        screen,
+                        CornerRadius::same(2),
+                        Stroke::new(1.5, colors.selection),
+                        StrokeKind::Inside,
+                    );
+                    painter.rect_filled(screen, 0.0, colors.marquee_fill);
+                }
+            }
         }
 
         if let Some(DragState::Freehand { tool, points }) = &self.state.drag {
