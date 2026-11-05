@@ -895,7 +895,7 @@ checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 
 [[package]]
 name = "drawcraft-app"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "base64",
  "clap",
@@ -918,14 +918,14 @@ dependencies = [
 
 [[package]]
 name = "drawcraft-command"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "drawcraft-document"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "drawcraft-geometry",
  "serde",
@@ -935,7 +935,7 @@ dependencies = [
 
 [[package]]
 name = "drawcraft-editor"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "drawcraft-command",
  "drawcraft-document",
@@ -947,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "drawcraft-format"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "drawcraft-document",
  "drawcraft-render",
@@ -959,14 +959,14 @@ dependencies = [
 
 [[package]]
 name = "drawcraft-geometry"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "drawcraft-mcp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "base64",
  "drawcraft-command",
@@ -980,7 +980,7 @@ dependencies = [
 
 [[package]]
 name = "drawcraft-render"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "drawcraft-document",
  "drawcraft-geometry",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "drawcraft-session"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "drawcraft-command",
  "drawcraft-document",
@@ -4580,7 +4580,7 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xtask"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde_json",
 ]

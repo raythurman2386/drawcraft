@@ -4,6 +4,10 @@ All notable changes to DrawCraft are documented here.
 
 ## Unreleased
 
+## [0.3.0] — 2026-11-05
+
+Selection improvements (#3), placement and inline text editing (#4/#5), shapes rail (#6), transform modifiers (#7), and document lifecycle, autosave, recovery, external-change handling, and fuzz coverage (#8).
+
 ### Added
 
 - Document lifecycle (Phase 4): debounced autosave with background worker, crash recovery (`session.recover_list` / `session.recover`), external-change detection (`session.external_check` / `session.reload` / `session.keep_mine`), atomic `format::write_atomic`, Open Recent missing-file handling + clear/remove, recovery and external-change prompts in the desktop UI.
