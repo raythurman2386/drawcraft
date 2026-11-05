@@ -383,6 +383,30 @@ mod tests {
     }
 
     #[test]
+    fn lasso_rejects_concave_notch_into_shape() {
+        let mut editor = editor();
+        // A sits under the notch; B sits clear of it on the right.
+        let a = add_rect(&mut editor, 20.0, 20.0, 60.0, 40.0);
+        let b = add_rect(&mut editor, 120.0, 20.0, 40.0, 40.0);
+        let notch = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(45.0, 0.0),
+            Vec2::new(50.0, 40.0),
+            Vec2::new(55.0, 0.0),
+            Vec2::new(200.0, 0.0),
+            Vec2::new(200.0, 100.0),
+            Vec2::new(0.0, 100.0),
+        ];
+        let count = editor.lasso_select(&notch, false);
+        assert_eq!(count, 1);
+        assert!(
+            !editor.selection.contains(&a),
+            "notch bites into A, so A is not fully contained"
+        );
+        assert!(editor.selection.contains(&b));
+    }
+
+    #[test]
     fn select_first_and_last_follow_z_order() {
         let mut editor = editor();
         let bottom = add_rect(&mut editor, 0.0, 0.0, 20.0, 20.0);
@@ -461,6 +485,23 @@ mod tests {
             .unwrap_or_default();
         assert_eq!(value.get("count").and_then(Value::as_u64), Some(1));
         assert!(editor.selection.contains(&id));
+    }
+
+    #[test]
+    fn edit_select_lasso_command_rejects_concave_notch() {
+        let mut editor = editor();
+        let a = add_rect(&mut editor, 20.0, 20.0, 60.0, 40.0);
+        let value = editor
+            .dispatch(
+                ids::EDIT_SELECT_LASSO,
+                &json!({"points": [
+                    [0.0, 0.0], [45.0, 0.0], [50.0, 40.0], [55.0, 0.0],
+                    [100.0, 0.0], [100.0, 100.0], [0.0, 100.0]
+                ]}),
+            )
+            .unwrap_or_default();
+        assert_eq!(value.get("count").and_then(Value::as_u64), Some(0));
+        assert!(!editor.selection.contains(&a));
     }
 
     #[test]

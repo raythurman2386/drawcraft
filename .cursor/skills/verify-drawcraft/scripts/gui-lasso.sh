@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # GUI lasso gesture proof on a private Xvfb display. Usage: gui-lasso.sh PROOF_DIR
+# The path encloses A + B and cuts into C (screen x 802-992 at 1400x900), so C is
+# only partially inside and must stay unselected.
 set -euo pipefail
 P=${1:?usage: gui-lasso.sh PROOF_DIR}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -21,7 +23,7 @@ import -window root "$P/gui-opened.png"
 "$HERE/xdrive.py" focus
 "$HERE/xdrive.py" key q
 sleep 1
-"$HERE/xdrive.py" dragpath --hold 250,340 420,320 600,325 770,350 795,450 785,565 600,590 420,585 245,565 230,450 250,350
+"$HERE/xdrive.py" dragpath --hold 250,340 420,320 600,325 770,330 880,340 900,450 880,560 770,575 600,590 420,585 245,565 230,450 250,350
 sleep 1; import -window root "$P/lasso-drag.png"
 "$HERE/xdrive.py" up
 sleep 1; import -window root "$P/lasso-selected.png"

@@ -6,7 +6,7 @@ All notable changes to DrawCraft are documented here.
 
 ### Added
 
-- Lasso selection tool (`Tool::Lasso`, shortcut Q) and `edit.select_lasso` command (fully-contained bounds).
+- Lasso selection tool (`Tool::Lasso`, shortcut Q) and `edit.select_lasso` command (fully-contained bounds: true containment, so a concave lasso that notches into a shape does not select it).
 - `edit.select_first` / `edit.select_last` select bottommost / topmost unlocked shapes by z-order.
 - One group-level shift rule for click, marquee, and lasso (groups are atomic toggle units).
 - Marquee now expands to the full group, matching click selection.
