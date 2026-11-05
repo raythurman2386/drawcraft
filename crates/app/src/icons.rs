@@ -27,6 +27,20 @@ pub fn paint_tool_icon(painter: &Painter, rect: Rect, tool: Tool, color: Color32
             ];
             painter.add(Shape::closed_line(points, stroke));
         }
+        Tool::Lasso => {
+            painter.add(Shape::closed_line(
+                vec![
+                    point(3.0, 5.0),
+                    point(7.0, 2.5),
+                    point(12.5, 4.0),
+                    point(13.0, 10.0),
+                    point(8.5, 13.5),
+                    point(3.5, 11.0),
+                ],
+                stroke,
+            ));
+            painter.circle_filled(point(8.0, 8.0), 1.2, color);
+        }
         Tool::Hand => {
             painter.add(Shape::line(
                 vec![

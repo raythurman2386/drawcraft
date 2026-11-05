@@ -257,6 +257,15 @@ impl DrawCraftApp {
             return;
         }
 
+        if tool == Tool::Lasso {
+            let additive = ui.input(|input| input.modifiers.shift);
+            self.state.drag = Some(DragState::Lasso {
+                points: vec![world],
+                additive,
+            });
+            return;
+        }
+
         if tool == Tool::Eraser {
             self.session.editor.snapshot();
             self.state.drag = Some(DragState::Erase { last: world });
@@ -301,6 +310,15 @@ impl DrawCraftApp {
                 self.apply_move(original, delta);
             }
             DragState::Marquee { current, .. } => *current = world,
+            DragState::Lasso { points, .. } => {
+                let threshold = 2.0 / self.session.editor.camera.zoom.max(0.1);
+                if points
+                    .last()
+                    .is_none_or(|last| last.distance(world) >= threshold)
+                {
+                    points.push(world);
+                }
+            }
             DragState::Create { current, .. } => *current = world,
             DragState::Freehand { points, .. } => {
                 let threshold = 2.0 / self.session.editor.camera.zoom.max(0.1);
@@ -364,6 +382,9 @@ impl DrawCraftApp {
             } => {
                 let rect = DocRect::new(start, current);
                 self.session.editor.brush_select(rect, additive);
+            }
+            DragState::Lasso { points, additive } => {
+                self.session.editor.lasso_select(&points, additive);
             }
             DragState::Create {
                 tool,
@@ -430,6 +451,7 @@ impl DrawCraftApp {
                 self.create_with_tool(tool, rect, None);
             }
             Tool::Draw | Tool::Highlighter | Tool::Laser => {}
+            Tool::Lasso => {}
             Tool::Hand => {}
             _ => {
                 if tool.is_shape_tool() || matches!(tool, Tool::Arrow | Tool::Line | Tool::Polyline)
@@ -687,6 +709,16 @@ impl DrawCraftApp {
             );
         }
 
+        if let Some(DragState::Lasso { points, .. }) = &self.state.drag {
+            let screen: Vec<Pos2> = points.iter().map(|point| view.pos(*point)).collect();
+            if screen.len() >= 2 {
+                painter.add(egui::Shape::line(
+                    screen,
+                    Stroke::new(1.25, colors.selection),
+                ));
+            }
+        }
+
         if let Some(DragState::Create {
             tool: _,
             start,
@@ -801,7 +833,7 @@ impl DrawCraftApp {
                 }
             }
             Tool::Text => CursorIcon::Text,
-            Tool::Draw | Tool::Highlighter | Tool::Laser => CursorIcon::Crosshair,
+            Tool::Draw | Tool::Highlighter | Tool::Laser | Tool::Lasso => CursorIcon::Crosshair,
             Tool::Eraser => CursorIcon::NoDrop,
             _ => CursorIcon::Crosshair,
         };
@@ -849,7 +881,7 @@ fn paint_empty_state(painter: &egui::Painter, view: View, p: theme::Palette) {
     painter.text(
         pos2(card.center().x, card.top() + 136.0),
         Align2::CENTER_CENTER,
-        "V  Select     D  Draw     T  Text     S  Sticky",
+        "V  Select     Q  Lasso     D  Draw     T  Text",
         FontId::monospace(10.5),
         p.muted,
     );

@@ -5,7 +5,7 @@ use drawcraft_document::{
     ArrowHead, ArrowStyle, Document, Fill, GroupId, PageId, Rect, ShapeId, ShapeKind, ShapeRecord,
     Style, Vec2, rect_anchor,
 };
-use drawcraft_geometry::Camera;
+use drawcraft_geometry::{Camera, rect_in_polygon};
 
 use crate::{EditError, History, Result, Selection, Tool};
 
@@ -320,6 +320,9 @@ impl Editor {
     }
 
     /// Select what is under the pointer, expanding to the whole group.
+    ///
+    /// Additive (shift) toggles the hit unit at group level: grouped shapes are
+    /// an atomic unit, so shift-clicking a selected group deselects every member.
     pub fn select_at(&mut self, point: Vec2, additive: bool, tolerance: f64) -> Option<ShapeId> {
         let Some(id) = self.topmost_at(point, tolerance) else {
             if !additive {
@@ -327,31 +330,7 @@ impl Editor {
             }
             return None;
         };
-        let group = self.doc.shape(&id).and_then(|shape| shape.group_id.clone());
-        if additive {
-            if let Some(group) = group {
-                let members: Vec<ShapeId> = self
-                    .doc
-                    .group_members(&group)
-                    .into_iter()
-                    .map(|shape| shape.id.clone())
-                    .collect();
-                self.selection.extend(members);
-            } else {
-                self.selection.toggle(id.clone());
-            }
-        } else if let Some(group) = group {
-            let members: Vec<ShapeId> = self
-                .doc
-                .group_members(&group)
-                .into_iter()
-                .map(|shape| shape.id.clone())
-                .collect();
-            let all = self.all_ids();
-            self.selection.set_existing(members, &all);
-        } else {
-            self.selection.select(id.clone());
-        }
+        self.apply_region_selection(std::slice::from_ref(&id), additive);
         Some(id)
     }
 
@@ -363,6 +342,78 @@ impl Editor {
             .collect()
     }
 
+    /// Expand any touched group id to every member. Ungrouped ids pass through.
+    ///
+    /// Used by click, marquee, lasso, and `edit.select` so groups stay atomic.
+    #[must_use]
+    pub fn expand_groups(&self, ids: &[ShapeId]) -> Vec<ShapeId> {
+        let mut out = Vec::new();
+        let mut seen_ids = HashSet::new();
+        let mut seen_groups = HashSet::new();
+        for id in ids {
+            let Some(shape) = self.doc.shape(id) else {
+                continue;
+            };
+            if let Some(group) = &shape.group_id {
+                if !seen_groups.insert(group.clone()) {
+                    continue;
+                }
+                for member in self.doc.group_members(group) {
+                    if seen_ids.insert(member.id.clone()) {
+                        out.push(member.id.clone());
+                    }
+                }
+            } else if seen_ids.insert(id.clone()) {
+                out.push(id.clone());
+            }
+        }
+        out
+    }
+
+    /// Apply a region hit as either replace-with-expanded or group-level toggle.
+    fn apply_region_selection(&mut self, raw_ids: &[ShapeId], additive: bool) {
+        if !additive {
+            let expanded = self.expand_groups(raw_ids);
+            let all = self.all_ids();
+            self.selection.set_existing(expanded, &all);
+            return;
+        }
+        self.toggle_units(raw_ids);
+    }
+
+    /// Toggle each atomic unit (group or ungrouped shape) among `raw_ids`.
+    fn toggle_units(&mut self, raw_ids: &[ShapeId]) {
+        let mut seen_groups = HashSet::new();
+        let mut seen_singles = HashSet::new();
+        for id in raw_ids {
+            let Some(shape) = self.doc.shape(id) else {
+                continue;
+            };
+            if let Some(group) = &shape.group_id {
+                if !seen_groups.insert(group.clone()) {
+                    continue;
+                }
+                let members: Vec<ShapeId> = self
+                    .doc
+                    .group_members(group)
+                    .into_iter()
+                    .map(|shape| shape.id.clone())
+                    .collect();
+                let all_selected = members.iter().all(|member| self.selection.contains(member));
+                if all_selected {
+                    for member in &members {
+                        self.selection.remove(member);
+                    }
+                } else {
+                    self.selection.extend(members);
+                }
+            } else if seen_singles.insert(id.clone()) {
+                self.selection.toggle(id.clone());
+            }
+        }
+    }
+
+    /// Marquee / brush selection. Touch-to-select; expands groups; shift toggles units.
     pub fn brush_select(&mut self, rect: Rect, additive: bool) -> usize {
         let ids: Vec<ShapeId> = self
             .doc
@@ -371,12 +422,57 @@ impl Editor {
             .filter(|shape| !shape.locked && rect.intersects(shape.world_bounds()))
             .map(|shape| shape.id.clone())
             .collect();
-        if additive {
-            self.selection.extend(ids);
-        } else {
-            self.selection.set_existing(ids, &self.all_ids());
-        }
+        self.apply_region_selection(&ids, additive);
         self.selection.len()
+    }
+
+    /// Lasso selection. Fully-contained bounds only; expands groups; shift toggles units.
+    pub fn lasso_select(&mut self, points: &[Vec2], additive: bool) -> usize {
+        if points.len() < 3 {
+            if !additive {
+                self.selection.clear();
+            }
+            return self.selection.len();
+        }
+        let ids: Vec<ShapeId> = self
+            .doc
+            .shapes()
+            .iter()
+            .filter(|shape| !shape.locked && rect_in_polygon(shape.world_bounds(), points))
+            .map(|shape| shape.id.clone())
+            .collect();
+        self.apply_region_selection(&ids, additive);
+        self.selection.len()
+    }
+
+    /// Select the bottommost unlocked shape by z-order (then expand its group).
+    pub fn select_first(&mut self) {
+        let id = self
+            .doc
+            .shapes()
+            .iter()
+            .filter(|shape| !shape.locked)
+            .min_by_key(|shape| (shape.z, &shape.id))
+            .map(|shape| shape.id.clone());
+        match id {
+            Some(id) => self.apply_region_selection(std::slice::from_ref(&id), false),
+            None => self.selection.clear(),
+        }
+    }
+
+    /// Select the topmost unlocked shape by z-order (then expand its group).
+    pub fn select_last(&mut self) {
+        let id = self
+            .doc
+            .shapes()
+            .iter()
+            .filter(|shape| !shape.locked)
+            .max_by_key(|shape| (shape.z, &shape.id))
+            .map(|shape| shape.id.clone());
+        match id {
+            Some(id) => self.apply_region_selection(std::slice::from_ref(&id), false),
+            None => self.selection.clear(),
+        }
     }
 
     // ---- Editing operations --------------------------------------------

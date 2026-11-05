@@ -264,7 +264,7 @@ pub fn commands() -> &'static [CommandDef] {
     &COMMANDS
 }
 
-static COMMANDS: [CommandDef; 56] = [
+static COMMANDS: [CommandDef; 59] = [
     // ---- File & document -------------------------------------------------
     cmd(
         ids::FILE_NEW,
@@ -390,7 +390,7 @@ static COMMANDS: [CommandDef; 56] = [
     cmd(
         ids::EDIT_SELECT,
         "Select shapes",
-        "Select specific shape ids, replacing the selection unless additive is true.",
+        "Select specific shape ids (groups expand). Additive extends after filtering nonexistent ids.",
         Category::Edit,
         Scope::Editor,
         &[
@@ -411,6 +411,37 @@ static COMMANDS: [CommandDef; 56] = [
         ids::EDIT_SELECT_NONE,
         "Clear selection",
         "Clear the current selection.",
+        Category::Edit,
+        Scope::Editor,
+        NONE,
+    ),
+    cmd(
+        ids::EDIT_SELECT_LASSO,
+        "Lasso select",
+        "Select shapes whose bounds are fully inside a polygon. Shift/additive toggles at group level.",
+        Category::Edit,
+        Scope::Editor,
+        &[
+            ParamDef::required("points", "Polygon points [[x,y],...]", ParamKind::Array),
+            ParamDef::optional(
+                "additive",
+                "Toggle units against selection",
+                ParamKind::Boolean,
+            ),
+        ],
+    ),
+    cmd(
+        ids::EDIT_SELECT_FIRST,
+        "Select first",
+        "Select the bottommost unlocked shape by z-order (group expands).",
+        Category::Edit,
+        Scope::Editor,
+        NONE,
+    ),
+    cmd(
+        ids::EDIT_SELECT_LAST,
+        "Select last",
+        "Select the topmost unlocked shape by z-order (group expands).",
         Category::Edit,
         Scope::Editor,
         NONE,

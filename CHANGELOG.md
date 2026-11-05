@@ -2,6 +2,19 @@
 
 All notable changes to DrawCraft are documented here.
 
+## Unreleased
+
+### Added
+
+- Lasso selection tool (`Tool::Lasso`, shortcut Q) and `edit.select_lasso` command (fully-contained bounds).
+- `edit.select_first` / `edit.select_last` select bottommost / topmost unlocked shapes by z-order.
+- One group-level shift rule for click, marquee, and lasso (groups are atomic toggle units).
+- Marquee now expands to the full group, matching click selection.
+
+### Fixed
+
+- `edit.select` additive path now filters nonexistent ids and expands groups like the replace path.
+
 ## [0.2.0] — 2026-11-04
 
 A full correctness and maintainability pass over the MVP. The document model and command surface are now treated as the foundation for v1 rather than a prototype.

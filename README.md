@@ -7,8 +7,8 @@ DrawCraft is clean-room: no copied code, assets, or algorithms from tldraw, godr
 ## What works today (v0.2.0)
 
 - **Infinite canvas** with pan, zoom, pinch, zoom-to-fit, grid, minimap, dark mode, and focus mode.
-- **Tools:** select, hand, freehand draw, highlighter, eraser, laser, line, arrow, text, sticky note, image, frame, and 20 geometric shapes.
-- **Editing:** click/shift/brush selection, move, resize, rotate, flip, duplicate, Alt-drag copy, grid/shape snapping (hold Ctrl/Cmd while dragging), group/ungroup, lock, z-order, align, distribute, copy/paste, undo/redo, multiple pages.
+- **Tools:** select, lasso, hand, freehand draw, highlighter, eraser, laser, line, arrow, text, sticky note, image, frame, and 20 geometric shapes.
+- **Editing:** click/shift/brush/lasso selection (groups are atomic; lasso is fully-contained), select first/last by z-order, move, resize, rotate, flip, duplicate, Alt-drag copy, grid/shape snapping (hold Ctrl/Cmd while dragging), group/ungroup, lock, z-order, align, distribute, copy/paste, undo/redo, multiple pages.
 - **Styling:** solid/dashed/dotted/hand-drawn strokes; none/semi/solid/pattern/full fills; stroke width, opacity, font size; labels and text; shape/arrow styling panel.
 - **Arrows:** bind endpoints to shapes and follow them, straight/bent/elbow routing, start/end heads, arrow labels.
 - **Documents:** atomic `.drawcraft` JSON save, Open Recent, session info, external files.

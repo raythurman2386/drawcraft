@@ -8,6 +8,7 @@ use thiserror::Error;
 pub enum Tool {
     #[default]
     Select,
+    Lasso,
     Hand,
     Draw,
     Eraser,
@@ -48,8 +49,9 @@ pub enum Tool {
 pub struct UnknownTool(pub String);
 
 impl Tool {
-    pub const ALL: [Self; 33] = [
+    pub const ALL: [Self; 34] = [
         Self::Select,
+        Self::Lasso,
         Self::Hand,
         Self::Draw,
         Self::Eraser,
@@ -88,6 +90,7 @@ impl Tool {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Select => "select",
+            Self::Lasso => "lasso",
             Self::Hand => "hand",
             Self::Draw => "draw",
             Self::Eraser => "eraser",
@@ -127,6 +130,7 @@ impl Tool {
     pub fn parse(value: &str) -> Option<Self> {
         Some(match value {
             "select" | "selection" | "pointer" => Self::Select,
+            "lasso" => Self::Lasso,
             "hand" | "pan" => Self::Hand,
             "draw" | "pen" => Self::Draw,
             "eraser" => Self::Eraser,
@@ -167,6 +171,7 @@ impl Tool {
     pub const fn icon(self) -> &'static str {
         match self {
             Self::Select => "↖",
+            Self::Lasso => "⌕",
             Self::Hand => "✥",
             Self::Draw => "✎",
             Self::Eraser => "⌫",
@@ -206,6 +211,7 @@ impl Tool {
     pub const fn label(self) -> &'static str {
         match self {
             Self::Select => "Select",
+            Self::Lasso => "Lasso",
             Self::Hand => "Hand",
             Self::Draw => "Draw",
             Self::Eraser => "Eraser",
@@ -275,7 +281,7 @@ impl Tool {
             Self::Chevron => ShapeKind::Chevron,
             Self::Cylinder => ShapeKind::Cylinder,
             Self::Cloud => ShapeKind::Cloud,
-            Self::Select | Self::Hand | Self::Eraser => return None,
+            Self::Select | Self::Lasso | Self::Hand | Self::Eraser => return None,
         })
     }
 
@@ -302,6 +308,7 @@ impl Tool {
     pub const fn shortcut(self) -> &'static str {
         match self {
             Self::Select => "V",
+            Self::Lasso => "Q",
             Self::Hand => "H",
             Self::Draw => "D",
             Self::Eraser => "E",

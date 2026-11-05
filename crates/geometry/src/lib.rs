@@ -23,7 +23,8 @@ mod vec2;
 
 pub use camera::Camera;
 pub use math::{
-    clamp, distance_point_segment, point_in_polygon, simplify_polyline, smooth_polyline,
+    clamp, distance_point_segment, point_in_polygon, rect_in_polygon, simplify_polyline,
+    smooth_polyline,
 };
 pub use rect::Rect;
 pub use transform::Transform;
@@ -77,6 +78,20 @@ mod tests {
         ];
         assert!(point_in_polygon(Vec2::new(2.0, 2.0), &polygon));
         assert!(!point_in_polygon(Vec2::new(5.0, 9.0), &polygon));
+    }
+
+    #[test]
+    fn rect_in_polygon_requires_full_containment() {
+        let polygon = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(100.0, 0.0),
+            Vec2::new(100.0, 100.0),
+            Vec2::new(0.0, 100.0),
+        ];
+        let inside = Rect::from_xywh(10.0, 10.0, 20.0, 20.0);
+        let overhang = Rect::from_xywh(90.0, 90.0, 20.0, 20.0);
+        assert!(rect_in_polygon(inside, &polygon));
+        assert!(!rect_in_polygon(overhang, &polygon));
     }
 
     #[test]

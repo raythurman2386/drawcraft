@@ -264,6 +264,7 @@ impl DrawCraftApp {
         let key = ctx.input(|input| {
             [
                 Key::V,
+                Key::Q,
                 Key::H,
                 Key::D,
                 Key::E,
@@ -286,6 +287,7 @@ impl DrawCraftApp {
         if let Some(key) = key {
             let tool = match key {
                 Key::V => Some(Tool::Select),
+                Key::Q => Some(Tool::Lasso),
                 Key::H => Some(Tool::Hand),
                 Key::D => Some(Tool::Draw),
                 Key::E => Some(Tool::Eraser),

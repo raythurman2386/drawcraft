@@ -46,6 +46,23 @@ pub fn point_in_polygon(point: Vec2, polygon: &[Vec2]) -> bool {
     inside
 }
 
+/// True when every corner of `rect` lies inside `polygon` (fully contained bounds).
+///
+/// Empty rectangles are treated as a single point at `min`. Used by lasso
+/// selection so the lasso is a precision contain tool while marquee stays touch.
+#[must_use]
+pub fn rect_in_polygon(rect: crate::Rect, polygon: &[Vec2]) -> bool {
+    if polygon.len() < 3 {
+        return false;
+    }
+    if rect.is_empty() {
+        return point_in_polygon(rect.min, polygon);
+    }
+    rect.corners()
+        .into_iter()
+        .all(|corner| point_in_polygon(corner, polygon))
+}
+
 /// Ramer-Douglas-Peucker polyline simplification.
 ///
 /// Iterative so that a hostile document with many points cannot overflow the

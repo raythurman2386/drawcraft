@@ -48,7 +48,7 @@ Legend: ✅ done for the current scope · 🟡 partial · ❌ not started.
 
 The interaction model must be complete before adding more surface area.
 
-- [ ] **Selection**: marquee already works; add lasso selection; make shift-click group behaviour consistent; selection order commands (first/last).
+- [x] **Selection**: lasso (fully-contained), group-level shift toggle for click/marquee/lasso, marquee group expand, edit.select_first/last by z-order.
 - [ ] **Transform**: finish edge handles, aspect-ratio lock (Shift), proportional resize from centre (Alt), rotation snapping (Shift 15°), numeric transform readout.
 - [ ] **Vertex editing**: drag points/vertices on line, polyline, arrow, and freehand records; add/remove vertices; convert corner ↔ smooth.
 - [ ] **Snapping**: visible guides (not just silent offset), distance labels, snap to shape edges/centres/grid; toggle per document.

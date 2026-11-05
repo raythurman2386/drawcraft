@@ -45,6 +45,9 @@ pub mod ids {
     pub const EDIT_SELECT: &str = "edit.select";
     pub const EDIT_SELECT_ALL: &str = "edit.select_all";
     pub const EDIT_SELECT_NONE: &str = "edit.select_none";
+    pub const EDIT_SELECT_LASSO: &str = "edit.select_lasso";
+    pub const EDIT_SELECT_FIRST: &str = "edit.select_first";
+    pub const EDIT_SELECT_LAST: &str = "edit.select_last";
 
     // Selection transforms.
     pub const EDIT_MOVE: &str = "edit.move";
