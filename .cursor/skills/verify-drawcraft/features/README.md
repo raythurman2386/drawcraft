@@ -11,6 +11,10 @@ PR adds or changes a command; command ids come from `drawcraft catalog`.
 | Select first / last | [selection-first-last.md](selection-first-last.md) | `edit.select_first`, `edit.select_last` | Command palette (Ctrl/Cmd+K) |
 | Tool rail geometric shapes | [tool-rail-shapes.md](tool-rail-shapes.md) | `shape.add` (via tool) | Rail **SHAPES**, keys `R`/`O`/`3`… |
 | Transform modifiers + readout | [transform-modifiers.md](transform-modifiers.md) | `edit.resize`, `edit.rotate` (headless, unchanged) | Select handles: Shift aspect / Alt centre / Shift 15° rotate |
+| Document lifecycle | [document-lifecycle.md](document-lifecycle.md) | `session.autosave_*`, `session.recover*`, `session.external_check`, `session.reload`, `session.keep_mine`, `doc.recent*` | File → Autosave / Open recent; recovery + external-change modals |
 
 Proven so far: `edit.select_lasso` CLI+MCP (`scripts/lasso-cli.sh`) and the GUI lasso gesture
-(`scripts/gui-lasso.sh`) on 2026-11-04. Others are mapped but not yet driven end to end.
+(`scripts/gui-lasso.sh`) on 2026-11-04; transform readout GUI (`scripts/gui-transform.sh`,
+`docs/proof/t2041u/`); document lifecycle CLI/MCP + GUI recovery/external prompts
+(`scripts/lifecycle-cli.sh`, `scripts/gui-recovery.sh`, `scripts/gui-external.sh`,
+`docs/proof/t2099u/`) on 2026-11-05.

@@ -14,11 +14,16 @@
     )
 )]
 
+use std::fs::{File, OpenOptions};
+use std::io::Write;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use drawcraft_document::{Document, ShapeId};
 use drawcraft_render::{RenderError, SvgOptions, document_scene, render_png, scene_svg};
 use thiserror::Error;
+
+static ATOMIC_TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Maximum accepted document size. Guards against accidentally loading a huge
 /// file into memory.
@@ -113,10 +118,14 @@ pub fn load(path: impl AsRef<Path>) -> Result<Document> {
     from_json(&text)
 }
 
-/// Save a document to disk atomically (write temp file, then rename).
-pub fn save(document: &Document, path: impl AsRef<Path>) -> Result<()> {
+/// Write `bytes` to `path` atomically.
+///
+/// Creates a unique temp file in the target directory, writes and `sync_all`s,
+/// renames into place, and best-effort fsyncs the parent directory on Unix.
+/// The temp file is removed if any step fails. Concurrent writers to the same
+/// target no longer collide on a fixed temp name.
+pub fn write_atomic(path: impl AsRef<Path>, bytes: &[u8]) -> Result<()> {
     let path = path.as_ref();
-    let json = to_json(document)?;
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     if !parent.as_os_str().is_empty() {
         std::fs::create_dir_all(parent)?;
@@ -125,13 +134,35 @@ pub fn save(document: &Document, path: impl AsRef<Path>) -> Result<()> {
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("document.drawcraft");
-    let temporary = parent.join(format!(".{file_name}.tmp"));
-    std::fs::write(&temporary, json.as_bytes())?;
-    if let Err(error) = std::fs::rename(&temporary, path) {
+    let counter = ATOMIC_TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let temporary = parent.join(format!(".{file_name}.{}.{counter}.tmp", std::process::id()));
+    let write_result = (|| -> Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&temporary, path)?;
+        #[cfg(unix)]
+        {
+            if let Ok(dir) = File::open(parent) {
+                let _ = dir.sync_all();
+            }
+        }
+        Ok(())
+    })();
+    if write_result.is_err() {
         let _ = std::fs::remove_file(&temporary);
-        return Err(FormatError::Io(error));
     }
-    Ok(())
+    write_result
+}
+
+/// Save a document to disk atomically (write temp file, then rename).
+pub fn save(document: &Document, path: impl AsRef<Path>) -> Result<()> {
+    let json = to_json(document)?;
+    write_atomic(path, json.as_bytes())
 }
 
 /// Build the scene that would be exported.
@@ -277,6 +308,80 @@ mod tests {
         let loaded = load(&path).unwrap_or_else(|error| panic!("{error}"));
         assert_eq!(loaded, document);
         assert!(path.exists());
+    }
+
+    #[test]
+    fn write_atomic_never_exposes_partial_to_reader() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
+        use std::thread;
+        use std::time::Duration;
+
+        let directory = tempfile::tempdir().unwrap_or_else(|_| panic!("temp dir"));
+        let path = directory.path().join("concurrent.drawcraft");
+        let first = sample();
+        save(&first, &path).unwrap_or_else(|error| panic!("{error}"));
+
+        let stop = Arc::new(AtomicBool::new(false));
+        let reader_stop = Arc::clone(&stop);
+        let reader_path = path.clone();
+        let reader = thread::spawn(move || {
+            while !reader_stop.load(AtomicOrdering::Relaxed) {
+                match load(&reader_path) {
+                    Ok(_) => {}
+                    Err(FormatError::Io(_)) => {}
+                    Err(error) => panic!("reader saw invalid document: {error}"),
+                }
+            }
+        });
+
+        let mut alt = sample();
+        let mut second = sample();
+        let shape = ShapeRecord::new(
+            ShapeId::from("shape-2"),
+            ShapeKind::Ellipse,
+            Vec2::new(1.0, 2.0),
+            Vec2::new(30.0, 40.0),
+        );
+        let _ = second.add_shape(shape);
+        for _ in 0..40 {
+            write_atomic(&path, to_json(&alt).unwrap().as_bytes()).unwrap();
+            write_atomic(&path, to_json(&second).unwrap().as_bytes()).unwrap();
+            std::mem::swap(&mut alt, &mut second);
+        }
+        stop.store(true, AtomicOrdering::Relaxed);
+        reader.join().unwrap_or_else(|_| panic!("reader join"));
+        thread::sleep(Duration::from_millis(1));
+        let loaded = load(&path).unwrap_or_else(|error| panic!("{error}"));
+        assert!(!loaded.shapes().is_empty());
+    }
+
+    #[test]
+    fn write_atomic_leaves_previous_file_on_failure() {
+        let directory = tempfile::tempdir().unwrap_or_else(|_| panic!("temp dir"));
+        let path = directory.path().join("keep.drawcraft");
+        let document = sample();
+        save(&document, &path).unwrap_or_else(|error| panic!("{error}"));
+        let before = std::fs::read(&path).unwrap();
+
+        // Target a path whose parent cannot be created as a file child of an existing file.
+        let blocked = path.join("nested").join("nope.drawcraft");
+        let err = write_atomic(&blocked, b"{}");
+        assert!(err.is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    #[test]
+    fn stray_temp_does_not_shadow_target() {
+        let directory = tempfile::tempdir().unwrap_or_else(|_| panic!("temp dir"));
+        let path = directory.path().join("real.drawcraft");
+        let document = sample();
+        save(&document, &path).unwrap_or_else(|error| panic!("{error}"));
+        let stray = directory.path().join(".real.drawcraft.1.1.tmp");
+        std::fs::write(&stray, b"{not json").unwrap();
+        let loaded = load(&path).unwrap_or_else(|error| panic!("{error}"));
+        assert_eq!(loaded, document);
+        assert!(stray.exists());
     }
 
     #[test]

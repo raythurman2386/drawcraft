@@ -29,5 +29,11 @@ serde_json.workspace = true
 name = "drawcraft"
 path = "src/main.rs"
 
+[dev-dependencies]
+drawcraft-document = { path = "../document" }
+drawcraft-format = { path = "../format" }
+serde_json.workspace = true
+tempfile.workspace = true
+
 [lints]
 workspace = true

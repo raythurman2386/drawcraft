@@ -11,11 +11,11 @@ DrawCraft is clean-room: no copied code, assets, or algorithms from tldraw, godr
 - **Editing:** click/shift/brush/lasso selection (groups are atomic; lasso is fully-contained), select first/last by z-order, move, resize, rotate, flip, duplicate, Alt-drag copy, grid/shape snapping (hold Ctrl/Cmd while dragging), group/ungroup, lock, z-order, align, distribute, copy/paste, undo/redo, multiple pages.
 - **Styling:** solid/dashed/dotted/hand-drawn strokes; none/semi/solid/pattern/full fills; stroke width, opacity, font size; labels and text; shape/arrow styling panel.
 - **Arrows:** bind endpoints to shapes and follow them, straight/bent/elbow routing, start/end heads, arrow labels.
-- **Documents:** atomic `.drawcraft` JSON save, Open Recent, session info, external files.
+- **Documents:** atomic `.drawcraft` JSON save, autosave + crash recovery, external-change detection (reload / keep mine), Open Recent with missing-file handling, session info.
 - **Export:** SVG and PNG, whole page or selection.
 - **Agent surface:** CLI, MCP stdio server, JSON document resource, command catalog, base64 previews.
 
-Known gaps and the path to v1 are tracked in [ROADMAP.md](ROADMAP.md). The biggest remaining v1 items are line vertex editing, deeper frame membership UX, autosave/crash recovery, and `.tldr` interoperability.
+Known gaps and the path to v1 are tracked in [ROADMAP.md](ROADMAP.md). The biggest remaining v1 items are line vertex editing, deeper frame membership UX, and `.tldr` interoperability.
 
 ## Design and theme
 

@@ -396,24 +396,65 @@ fn menu_file(app: &mut DrawCraftApp, ui: &mut egui::Ui) {
             ui.close();
         }
         ui.separator();
+        let mut autosave_enabled = app
+            .session
+            .autosave_status()
+            .get("enabled")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true);
+        if ui.checkbox(&mut autosave_enabled, "Autosave").changed() {
+            app.run(
+                ids::SESSION_AUTOSAVE_SET,
+                json!({"enabled": autosave_enabled}),
+            );
+        }
         ui.menu_button("Open recent", |ui| {
-            let recent = app.session.recent().to_vec();
-            if recent.is_empty() {
+            let entries = app.session.recent_entries();
+            if entries.is_empty() {
                 ui.weak("No recent documents");
             }
-            for path in recent {
-                let label = path
+            for (path, exists) in entries {
+                let file_name = path
                     .file_name()
                     .and_then(|name| name.to_str())
                     .unwrap_or("document");
-                if ui
-                    .button(label)
-                    .on_hover_text(path.display().to_string())
-                    .clicked()
-                {
-                    if let Err(error) = app.open_path(&path) {
-                        app.state.last_error = Some(error);
+                let label = if exists {
+                    file_name.to_owned()
+                } else {
+                    format!("{file_name} (missing)")
+                };
+                ui.horizontal(|ui| {
+                    let response = if exists {
+                        ui.button(label).on_hover_text(path.display().to_string())
+                    } else {
+                        ui.weak(label)
+                            .on_hover_text(format!("{} — file is missing", path.display()))
+                    };
+                    if response.clicked() {
+                        if exists {
+                            if let Err(error) = app.open_path(&path) {
+                                app.state.last_error = Some(error);
+                            }
+                        } else {
+                            app.state.last_error = Some(format!(
+                                "Recent file is missing: {}\nUse Remove to clear it.",
+                                path.display()
+                            ));
+                        }
+                        ui.close();
                     }
+                    if !exists && ui.small_button("Remove").clicked() {
+                        app.run(
+                            ids::DOC_RECENT_REMOVE,
+                            json!({"path": path.display().to_string()}),
+                        );
+                    }
+                });
+            }
+            if !app.session.recent().is_empty() {
+                ui.separator();
+                if ui.button("Clear recent").clicked() {
+                    app.run(ids::DOC_RECENT_CLEAR, json!({}));
                     ui.close();
                 }
             }

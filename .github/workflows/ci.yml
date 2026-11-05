@@ -43,3 +43,28 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build core crates for wasm
         run: cargo run -p xtask -- wasm
+
+  fuzz:
+    name: fuzz from_json (60s)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - name: Run libFuzzer target
+        working-directory: fuzz
+        run: cargo +nightly fuzz run from_json -- -max_total_time=60
+      - name: Upload fuzz artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: |
+            fuzz/artifacts
+            fuzz/corpus
+

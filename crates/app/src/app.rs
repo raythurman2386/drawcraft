@@ -65,6 +65,13 @@ impl DrawCraftApp {
                     self.state.set_status(format!("Saved {}", path.display()));
                     self.state.last_error = None;
                 }
+                Err(drawcraft_session::SessionError::ExternalChange { path }) => {
+                    self.state.external_change_prompt =
+                        Some(crate::lifecycle::ExternalChangePrompt {
+                            path: path.display().to_string(),
+                        });
+                    self.state.set_status("File changed on disk");
+                }
                 Err(error) => self.state.last_error = Some(error.to_string()),
             }
         } else {
@@ -329,6 +336,15 @@ impl eframe::App for DrawCraftApp {
         }
         self.handle_shortcuts(ui.ctx());
 
+        let now = std::time::Instant::now();
+        let tick = self.session.tick(now);
+        if self.state.recovery_prompt.is_none() {
+            self.maybe_prompt_external(tick.external_changed);
+        }
+        if let Some(wake) = tick.next_wake {
+            ui.ctx().request_repaint_after(wake);
+        }
+
         // egui hands out space in call order: claim the top and bottom bars
         // before the side panels so both bars span the full window width.
         self.top_bar(ui);
@@ -340,6 +356,8 @@ impl eframe::App for DrawCraftApp {
         });
         self.show_command_palette(ui.ctx());
         self.show_help(ui.ctx());
+        self.show_recovery_prompt(ui.ctx());
+        self.show_external_change_prompt(ui.ctx());
         self.show_error(ui.ctx());
     }
 }

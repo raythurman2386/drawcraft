@@ -29,7 +29,9 @@ human / CLI / MCP
   Session::execute(id, params) ──────────────┐
        │                                     │
        ├─ file.* / export.* / doc.*          │
-       │      → format + atomic I/O          │
+       │   session.autosave_* / recover_*    │
+       │   session.external_* / keep_mine    │
+       │      → format::write_atomic         │
        │                                     │
        └─ editor.dispatch(id, params)        │
               │                              │
@@ -39,7 +41,17 @@ human / CLI / MCP
               └─ return JSON result          │
                                              ▼
                                    .drawcraft on disk
+                                         │
+                    autosave worker (std thread + mpsc)
+                                         ▼
+                         <config>/drawcraft/autosave/*
 ```
+
+Lifecycle details:
+
+- `Session::tick` (called each UI frame) drives debounced autosave and a 2 s external-change poll; the app schedules `request_repaint_after` so idle windows still wake.
+- Autosave clones the `Document` on the UI thread; serialise + `write_atomic` run on the worker. Successful save and clean exit remove the document's autosave; restore keeps the original path and marks dirty.
+- External change uses `DiskFingerprint { mtime, len, hash }` (stat first, hash only on change). Save re-checks before write and returns `SessionError::ExternalChange` unless `force` / `keep_mine`.
 
 Rendering is pull-based: the UI asks `drawcraft-render` for a `Scene`, then draws it with egui. Export asks for the same `Scene` and writes SVG or rasterises it with resvg. There is no second geometry implementation for export.
 
@@ -118,8 +130,10 @@ It does not own the document, undo history, arrow routing, validation, or export
 - **document:** validation, page operations, unknown-field preservation, reference remapping.
 - **editor:** every command is dispatched; transforms; arrow binding; copy/paste/duplicate; pages.
 - **render:** all geometric kinds produce paths; triangulation; SVG structure.
-- **format:** JSON round-trip, unknown fields, oversized rejection, atomic save, SVG/PNG export.
-- **session:** command flow, save/open/export round-trip.
-- **mcp:** initialize, tools, notifications, parse errors, resource reads.
+- **format:** JSON round-trip, unknown fields, oversized rejection, `write_atomic` (concurrent reader, failed write keeps previous, stray temp ignored), fuzz-corpus replay.
+- **session:** command flow, save/open/export round-trip, autosave/recovery (equal-content discard), external-change force/reload/keep_mine, recent clear/remove, `every_session_command_is_handled_by_execute`.
+- **mcp:** initialize, tools, notifications, parse errors, resource reads, lifecycle commands via `drawcraft_command`.
+- **app:** `lifecycle_kill` SIGKILLs `drawcraft mcp` mid-edit and asserts restore/discard.
+- **fuzz:** CI nightly job runs `cargo fuzz` on `from_json` for 60 s (does not gate the main check job).
 
 Run everything with `cargo run -p xtask -- check`.

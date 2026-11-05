@@ -91,8 +91,11 @@ like; never delete `$P/*.json` or `$P/*.png` evidence.
 | `scripts/lasso-cli.sh P` | Seeds `P/board.drawcraft`, runs `edit.select_lasso` via `run` and via MCP + `doc.info`, asserts count 2 / selection 2. Exit 0 = pass. |
 | `scripts/gui-lasso.sh P` | Xvfb :99 + GUI, Q, freehand lasso around A+B, screenshots `P/lasso-drag.png`, `P/lasso-selected.png`, then kills its own PIDs. |
 | `scripts/gui-transform.sh P` | Xvfb :99 + GUI, five transform cases (corner free/Shift, edge Alt, rotate free/Shift), mid-drag + after screenshots. |
+| `scripts/lifecycle-cli.sh P` | MCP: edit, `session.autosave_now`, SIGKILL, relaunch, recover, assert shapes. Also external-change force path. |
+| `scripts/gui-recovery.sh P` | Xvfb :99 + short autosave interval, edit, kill -9, relaunch, screenshot recovery prompt, click Restore. |
+| `scripts/gui-external.sh P` | Xvfb :99, open file, external rewrite via CLI, wait for poll, screenshot external prompt, click Reload / Keep mine. |
 | `scripts/xdrive.py` | XTest mouse/keyboard driver (`keydown`/`keyup` for held modifiers). |
 
-All need `DRAWCRAFT_BIN` (default `target/debug/drawcraft`). GUI needs `Xvfb`, ImageMagick `import`, `libXtst`.
+All need `DRAWCRAFT_BIN` (default `target/debug/drawcraft`) and `XDG_CONFIG_HOME=$P/xdg`. GUI needs `Xvfb`, ImageMagick `import`, `libXtst`. Fuzz smoke: `cargo run -p xtask -- fuzz 30`.
 
 Feature map: [`features/README.md`](features/README.md).

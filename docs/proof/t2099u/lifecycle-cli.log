@@ -1,0 +1,5 @@
+{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{},"resources":{}},"serverInfo":{"name":"drawcraft","version":"0.2.0"}}}
+{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"{\"candidates\":[{\"source_path\":\"/tmp/dc-proof-t2099u/lifecycle.drawcraft\",\"autosave\":\"/tmp/dc-proof-t2099u/xdg/drawcraft/autosave/10bfcd4492a75bf7.drawcraft\",\"saved_at\":1793906712,\"autosave_mtime\":1793906712,\"revision\":2,\"shapes\":3}]}"}]}}
+{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"{\"ok\":true,\"action\":\"restore\",\"path\":\"/tmp/dc-proof-t2099u/lifecycle.drawcraft\",\"dirty\":true,\"shapes\":3}"}]}}
+{"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"{\"path\":\"/tmp/dc-proof-t2099u/lifecycle.drawcraft\",\"dirty\":true,\"revision\":1,\"pages\":1,\"active_page\":\"page-1\",\"shapes\":3,\"selection\":0,\"can_undo\":false,\"can_redo\":false,\"recent\":[\"/tmp/dc-proof-t2099u/lifecycle.drawcraft\"]}"}]}}
+PASS: lifecycle CLI/MCP kill-restore + external-change

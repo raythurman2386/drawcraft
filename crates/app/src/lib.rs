@@ -12,6 +12,7 @@ pub mod app;
 pub mod canvas;
 pub mod icons;
 pub mod inline_edit;
+pub mod lifecycle;
 pub mod panels;
 pub mod state;
 pub mod theme;
@@ -35,6 +36,7 @@ pub fn run_native(path: Option<PathBuf>, dark: bool) -> Result<(), Box<dyn std::
             app.state.last_error = Some(error);
         }
     }
+    app.check_recovery();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1440.0, 900.0])

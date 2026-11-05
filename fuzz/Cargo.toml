@@ -1,0 +1,23 @@
+[package]
+name = "drawcraft-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+drawcraft-format = { path = "../crates/format" }
+
+# Isolated workspace so the root 1.99.0 pin and `cargo test --workspace` stay unaffected.
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "from_json"
+path = "fuzz_targets/from_json.rs"
+test = false
+doc = false
+bench = false

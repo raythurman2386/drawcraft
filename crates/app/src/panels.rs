@@ -753,7 +753,7 @@ fn segmented<T: Copy + PartialEq>(
     changed
 }
 
-fn action_button(ui: &mut egui::Ui, p: Palette, label: &str) -> Response {
+pub(crate) fn action_button(ui: &mut egui::Ui, p: Palette, label: &str) -> Response {
     ui.add(
         Button::new(RichText::new(label).size(10.5).color(p.secondary))
             .frame(false)
