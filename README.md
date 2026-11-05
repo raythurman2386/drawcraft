@@ -4,7 +4,7 @@
 
 DrawCraft is clean-room: no copied code, assets, or algorithms from tldraw, godraw, Adobe, or other proprietary tools. See [AGENTS.md](AGENTS.md) for the rules that keep it that way.
 
-## What works today (v0.2.0)
+## What works today (v0.3.0)
 
 - **Infinite canvas** with pan, zoom, pinch, zoom-to-fit, grid, minimap, dark mode, and focus mode.
 - **Tools:** select, lasso, hand, freehand draw, highlighter, eraser, laser, line, arrow, text, sticky note, image, frame, and 20 geometric shapes.
@@ -89,8 +89,8 @@ Other tasks: `xtask fmt`, `clippy`, `test`, `build`, `wasm`, `bundle`, `layers`,
 Push an annotated `vX.Y.Z` tag to cut a release:
 
 ```sh
-git tag -a v0.2.0 -m "v0.2.0"
-git push origin v0.2.0
+git tag -a v0.3.0 -m "v0.3.0"
+git push origin v0.3.0
 ```
 
 `.github/workflows/release.yml` builds the desktop binary for Linux (x86_64), macOS (aarch64), and Windows (x86_64), packages each with the licenses, README, and changelog (`.tar.gz` on Unix, `.zip` on Windows), and publishes a GitHub release with `checksums.txt` and generated notes. Tags with a hyphen (`v0.3.0-rc.1`) are marked as prereleases.

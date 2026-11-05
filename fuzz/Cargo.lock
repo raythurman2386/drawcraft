@@ -112,7 +112,7 @@ checksum = "be1e0bca6c3637f992fc1cc7cbc52a78c1ef6db076dbf1059c4323d6a2048376"
 
 [[package]]
 name = "drawcraft-document"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "drawcraft-geometry",
  "serde",
@@ -122,7 +122,7 @@ dependencies = [
 
 [[package]]
 name = "drawcraft-format"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "drawcraft-document",
  "drawcraft-render",
@@ -141,14 +141,14 @@ dependencies = [
 
 [[package]]
 name = "drawcraft-geometry"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "drawcraft-render"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "drawcraft-document",
  "drawcraft-geometry",
