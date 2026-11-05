@@ -22,6 +22,13 @@ pub struct ExternalChangePrompt {
     pub path: String,
 }
 
+/// Pending New/Open that needs confirm because the document is dirty.
+#[derive(Clone, Debug)]
+pub enum LeaveDirtyPrompt {
+    New,
+    Open { path: String },
+}
+
 impl DrawCraftApp {
     /// Scan for recovery candidates after launch / open.
     pub(crate) fn check_recovery(&mut self) {
@@ -157,8 +164,80 @@ impl DrawCraftApp {
         }
     }
 
+    pub(crate) fn show_leave_dirty_prompt(&mut self, ctx: &egui::Context) {
+        let Some(prompt) = self.state.leave_dirty_prompt.clone() else {
+            return;
+        };
+        let p = theme::palette(self.session.editor.view.dark);
+        let mut open = true;
+        let mut confirm = false;
+        let mut cancel = false;
+        let title = match &prompt {
+            LeaveDirtyPrompt::New => "Start a new document?",
+            LeaveDirtyPrompt::Open { .. } => "Open another document?",
+        };
+        egui::Window::new(title)
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .anchor(Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .show(ctx, |ui| {
+                ui.label(
+                    RichText::new(
+                        "You have unsaved changes. Continuing keeps a recovery autosave so you can restore later.",
+                    )
+                    .size(13.0)
+                    .strong(),
+                );
+                if let LeaveDirtyPrompt::Open { path } = &prompt {
+                    ui.add_space(6.0);
+                    ui.label(RichText::new(path.clone()).size(12.0).color(p.secondary));
+                }
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    if action_button(ui, p, "Continue").clicked() {
+                        confirm = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        cancel = true;
+                    }
+                });
+            });
+        if !open || cancel {
+            self.state.leave_dirty_prompt = None;
+            return;
+        }
+        if confirm {
+            match prompt {
+                LeaveDirtyPrompt::New => {
+                    self.run(ids::FILE_NEW, json!({"confirm": true}));
+                    self.state
+                        .set_status("New document (recovery autosave kept)");
+                }
+                LeaveDirtyPrompt::Open { path } => match self
+                    .session
+                    .execute(ids::FILE_OPEN, &json!({"path": path, "confirm": true}))
+                {
+                    Ok(_) => {
+                        self.state
+                            .set_status(format!("Opened {}", self.session.display_name()));
+                        self.state.last_error = None;
+                        self.check_recovery();
+                    }
+                    Err(error) => {
+                        self.state.last_error = Some(error.to_string());
+                    }
+                },
+            }
+            self.state.leave_dirty_prompt = None;
+        }
+    }
+
     pub(crate) fn maybe_prompt_external(&mut self, changed: bool) {
         if !changed || self.state.recovery_prompt.is_some() {
+            return;
+        }
+        if self.state.leave_dirty_prompt.is_some() {
             return;
         }
         if self.state.external_change_prompt.is_some() {

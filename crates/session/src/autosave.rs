@@ -62,6 +62,7 @@ struct AutosaveJob {
     document: Document,
     target: PathBuf,
     meta: AutosaveMeta,
+    revision: u64,
 }
 
 enum WorkerMsg {
@@ -69,6 +70,12 @@ enum WorkerMsg {
     /// Drop any queued work so a finished save cannot be overwritten.
     Cancel,
     Shutdown,
+}
+
+/// Outcome of a background autosave write, polled by [`AutosaveRuntime::poll_results`].
+pub enum WorkerResult {
+    Done { revision: u64, path: PathBuf },
+    Failed { revision: u64, error: String },
 }
 
 /// Owns the worker thread and debounce bookkeeping for one [`crate::Session`].
@@ -79,8 +86,13 @@ pub struct AutosaveRuntime {
     pub last_autosave_at: Option<SystemTime>,
     pub last_autosave_path: Option<PathBuf>,
     pub pending: bool,
+    /// Last background write failure message, cleared on the next success.
+    pub last_error: Option<String>,
     cancel_generation: u64,
+    /// Revision of the newest job still in flight / awaiting poll.
+    queued_revision: Option<u64>,
     tx: Option<Sender<WorkerMsg>>,
+    result_rx: Option<Receiver<WorkerResult>>,
     handle: Option<JoinHandle<()>>,
 }
 
@@ -94,8 +106,11 @@ impl AutosaveRuntime {
             last_autosave_at: None,
             last_autosave_path: None,
             pending: false,
+            last_error: None,
             cancel_generation: 0,
+            queued_revision: None,
             tx: None,
+            result_rx: None,
             handle: None,
         }
     }
@@ -105,8 +120,10 @@ impl AutosaveRuntime {
             return;
         }
         let (tx, rx) = mpsc::channel();
-        let handle = std::thread::spawn(move || worker_loop(rx));
+        let (result_tx, result_rx) = mpsc::channel();
+        let handle = std::thread::spawn(move || worker_loop(rx, result_tx));
         self.tx = Some(tx);
+        self.result_rx = Some(result_rx);
         self.handle = Some(handle);
     }
 
@@ -118,6 +135,7 @@ impl AutosaveRuntime {
     pub fn cancel_pending(&mut self) {
         self.cancel_generation = self.cancel_generation.wrapping_add(1);
         self.pending = false;
+        self.queued_revision = None;
         if let Some(tx) = &self.tx {
             let _ = tx.send(WorkerMsg::Cancel);
         }
@@ -161,14 +179,48 @@ impl AutosaveRuntime {
         if let Some(tx) = &self.tx {
             let _ = tx.send(WorkerMsg::Job(Box::new(AutosaveJob {
                 document,
-                target: target.clone(),
+                target,
                 meta,
+                revision,
             })));
-            self.last_autosaved_revision = revision;
-            self.last_autosave_path = Some(target);
-            self.last_autosave_at = Some(SystemTime::now());
-            self.pending = false;
+            // Do not advance last_autosaved_revision or clear pending until the
+            // worker reports success — failures must keep the revision pending.
+            self.queued_revision = Some(revision);
         }
+    }
+
+    /// Apply worker outcomes. Returns the newest failure message this poll, if any.
+    pub fn poll_results(&mut self) -> Option<String> {
+        let Some(rx) = &self.result_rx else {
+            return None;
+        };
+        let mut failure: Option<String> = None;
+        loop {
+            match rx.try_recv() {
+                Ok(WorkerResult::Done { revision, path }) => {
+                    if revision >= self.last_autosaved_revision {
+                        self.last_autosaved_revision = revision;
+                        self.last_autosave_path = Some(path);
+                        self.last_autosave_at = Some(SystemTime::now());
+                    }
+                    self.last_error = None;
+                    if self.queued_revision == Some(revision) {
+                        self.pending = false;
+                        self.queued_revision = None;
+                    }
+                }
+                Ok(WorkerResult::Failed { revision, error }) => {
+                    self.last_error = Some(error.clone());
+                    self.pending = true;
+                    if self.queued_revision == Some(revision) {
+                        self.queued_revision = None;
+                    }
+                    failure = Some(error);
+                }
+                Err(TryRecvError::Empty) | Err(TryRecvError::Disconnected) => break,
+            }
+        }
+        failure
     }
 
     /// Synchronous autosave used by tests, CLI, and MCP.
@@ -181,11 +233,16 @@ impl AutosaveRuntime {
     ) -> crate::Result<PathBuf> {
         // Cancel any stale background write that could resurrect after this.
         self.cancel_pending();
-        write_autosave_pair(document, target, &meta)?;
+        write_autosave_pair(document, target, &meta).inspect_err(|error| {
+            self.last_error = Some(error.to_string());
+            self.pending = true;
+        })?;
         self.last_autosaved_revision = revision;
         self.last_autosave_path = Some(target.to_path_buf());
         self.last_autosave_at = Some(SystemTime::now());
         self.pending = false;
+        self.last_error = None;
+        self.queued_revision = None;
         Ok(target.to_path_buf())
     }
 
@@ -201,6 +258,7 @@ impl AutosaveRuntime {
             "last_autosave_at": last,
             "pending": self.pending,
             "last_autosaved_revision": self.last_autosaved_revision,
+            "last_error": self.last_error,
         })
     }
 
@@ -220,7 +278,7 @@ impl Drop for AutosaveRuntime {
     }
 }
 
-fn worker_loop(rx: Receiver<WorkerMsg>) {
+fn worker_loop(rx: Receiver<WorkerMsg>, result_tx: Sender<WorkerResult>) {
     loop {
         let first = match rx.recv() {
             Ok(WorkerMsg::Shutdown) | Err(_) => break,
@@ -245,8 +303,23 @@ fn worker_loop(rx: Receiver<WorkerMsg>) {
                 Err(TryRecvError::Disconnected) => return,
             }
         }
-        if !cancelled {
-            let _ = write_autosave_pair(&job.document, &job.target, &job.meta);
+        if cancelled {
+            continue;
+        }
+        match write_autosave_pair(&job.document, &job.target, &job.meta) {
+            Ok(()) => {
+                let _ = result_tx.send(WorkerResult::Done {
+                    revision: job.revision,
+                    path: job.target,
+                });
+            }
+            Err(error) => {
+                let error = format!("{} ({})", error, job.target.display());
+                let _ = result_tx.send(WorkerResult::Failed {
+                    revision: job.revision,
+                    error,
+                });
+            }
         }
     }
 }

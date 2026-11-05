@@ -371,7 +371,7 @@ impl DrawCraftApp {
 fn menu_file(app: &mut DrawCraftApp, ui: &mut egui::Ui) {
     ui.menu_button("File", |ui| {
         if ui.button("New").clicked() {
-            app.run(ids::FILE_NEW, json!({}));
+            app.request_new_document();
             ui.close();
         }
         if ui.button("Open…").clicked() {

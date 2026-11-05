@@ -32,17 +32,38 @@ impl DrawCraftApp {
 
     /// Open a document after construction.
     pub fn open_path(&mut self, path: impl AsRef<Path>) -> Result<(), String> {
-        self.session
-            .open(path)
-            .map(|_| {
+        let path = path.as_ref();
+        if self.session.dirty {
+            self.state.leave_dirty_prompt = Some(crate::lifecycle::LeaveDirtyPrompt::Open {
+                path: path.display().to_string(),
+            });
+            return Ok(());
+        }
+        match self.session.execute(
+            ids::FILE_OPEN,
+            &serde_json::json!({"path": path.display().to_string()}),
+        ) {
+            Ok(_) => {
                 self.state
                     .set_status(format!("Opened {}", self.session.display_name()));
-            })
-            .map_err(|error| {
+                self.state.last_error = None;
+                self.check_recovery();
+                Ok(())
+            }
+            Err(error) => {
                 let message = error.to_string();
                 self.state.last_error = Some(message.clone());
-                message
-            })
+                Err(message)
+            }
+        }
+    }
+
+    pub(crate) fn request_new_document(&mut self) {
+        if self.session.dirty {
+            self.state.leave_dirty_prompt = Some(crate::lifecycle::LeaveDirtyPrompt::New);
+            return;
+        }
+        self.run(ids::FILE_NEW, serde_json::json!({}));
     }
 
     pub(crate) fn run(&mut self, id: &str, params: Value) {
@@ -197,7 +218,7 @@ impl DrawCraftApp {
             return;
         }
         if command && ctx.input(|input| input.key_pressed(Key::N)) {
-            self.run(ids::FILE_NEW, json!({}));
+            self.request_new_document();
             return;
         }
         if command && ctx.input(|input| input.key_pressed(Key::A)) {
@@ -338,6 +359,10 @@ impl eframe::App for DrawCraftApp {
 
         let now = std::time::Instant::now();
         let tick = self.session.tick(now);
+        if let Some(error) = tick.autosave_error {
+            self.state.set_status(format!("Autosave failed: {error}"));
+            self.state.last_error = Some(format!("Autosave failed: {error}"));
+        }
         if self.state.recovery_prompt.is_none() {
             self.maybe_prompt_external(tick.external_changed);
         }
@@ -358,6 +383,7 @@ impl eframe::App for DrawCraftApp {
         self.show_help(ui.ctx());
         self.show_recovery_prompt(ui.ctx());
         self.show_external_change_prompt(ui.ctx());
+        self.show_leave_dirty_prompt(ui.ctx());
         self.show_error(ui.ctx());
     }
 }

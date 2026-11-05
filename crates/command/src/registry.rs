@@ -144,6 +144,19 @@ impl CommandDef {
 const NONE: &[ParamDef] = &[];
 
 const P_PATH: &[ParamDef] = &[ParamDef::required("path", "File path", ParamKind::String)];
+const P_CONFIRM: &[ParamDef] = &[ParamDef::optional(
+    "confirm",
+    "Continue despite unsaved changes (keeps recovery autosave)",
+    ParamKind::Boolean,
+)];
+const P_OPEN: &[ParamDef] = &[
+    ParamDef::required("path", "File path", ParamKind::String),
+    ParamDef::optional(
+        "confirm",
+        "Continue despite unsaved changes (keeps recovery autosave)",
+        ParamKind::Boolean,
+    ),
+];
 const P_SAVE: &[ParamDef] = &[
     ParamDef::optional("path", "File path", ParamKind::String),
     ParamDef::optional(
@@ -302,18 +315,18 @@ static COMMANDS: [CommandDef; 69] = [
     cmd(
         ids::FILE_NEW,
         "New document",
-        "Discard the current document and start a blank page.",
+        "Start a blank page. Pass confirm=true when the current document is dirty; recovery autosave is kept.",
         Category::File,
         Scope::Session,
-        NONE,
+        P_CONFIRM,
     ),
     cmd(
         ids::FILE_OPEN,
         "Open document",
-        "Open a .drawcraft file from disk.",
+        "Open a .drawcraft file from disk. Pass confirm=true when the current document is dirty; recovery autosave is kept.",
         Category::File,
         Scope::Session,
-        P_PATH,
+        P_OPEN,
     ),
     cmd(
         ids::FILE_SAVE,

@@ -55,6 +55,10 @@ pub enum SessionError {
     ExternalChange { path: PathBuf },
     #[error("document has unsaved changes; pass force=true to reload")]
     DirtyReload,
+    #[error(
+        "document has unsaved changes; pass confirm=true to continue (recovery autosave is kept)"
+    )]
+    UnsavedChanges,
 }
 
 pub type Result<T> = std::result::Result<T, SessionError>;
@@ -66,6 +70,8 @@ pub struct TickOutcome {
     pub next_wake: Option<Duration>,
     /// True when the on-disk file no longer matches the baseline fingerprint.
     pub external_changed: bool,
+    /// Background autosave write failure to surface in the UI status/toast.
+    pub autosave_error: Option<String>,
 }
 
 /// A document open in the workspace.
@@ -169,7 +175,10 @@ impl Session {
 
     /// Drive autosave debounce and external-change polling.
     pub fn tick(&mut self, now: Instant) -> TickOutcome {
-        let mut outcome = TickOutcome::default();
+        let mut outcome = TickOutcome {
+            autosave_error: self.autosave.poll_results(),
+            ..TickOutcome::default()
+        };
 
         let target = self.autosave_path();
         let meta = autosave::build_meta(
@@ -208,8 +217,11 @@ impl Session {
     }
 
     /// Reset to a blank document.
+    ///
+    /// Does **not** clear the recovery autosave — that safety net stays until a
+    /// clean exit, a successful save, or an explicit recover discard. Callers
+    /// that leave a dirty document must pass `confirm` through `file.new`.
     pub fn new_document(&mut self) {
-        self.clear_current_autosave();
         self.editor.reset();
         self.path = None;
         self.dirty = false;
@@ -225,10 +237,13 @@ impl Session {
     }
 
     /// Open a document and make it current.
+    ///
+    /// Does **not** clear the recovery autosave for the previous document — see
+    /// [`Self::new_document`]. Callers leaving a dirty document must pass
+    /// `confirm` through `file.open`.
     pub fn open(&mut self, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
         let document = drawcraft_format::load(path)?;
-        self.clear_current_autosave();
         self.editor.replace_document(document)?;
         self.path = Some(path.to_path_buf());
         self.dirty = false;
@@ -265,9 +280,14 @@ impl Session {
     }
 
     fn save_to(&mut self, path: &Path, force: bool) -> Result<()> {
+        // Only treat the target as "this document on disk" when it is the same
+        // file identity as the open path (canonical / aliases). Save As to a
+        // different existing path must not false-positive ExternalChange.
         if !force
             && !self.keep_mine_armed
             && let Some(baseline) = &self.disk_baseline
+            && let Some(current) = self.path.as_ref()
+            && same_document_path(current, path)
             && path.exists()
             && baseline.differs_from_disk(path)?
         {
@@ -354,8 +374,12 @@ impl Session {
 
     pub fn autosave_now(&mut self) -> Result<Value> {
         let target = self.autosave_path();
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)?;
+        if let Some(parent) = target.parent()
+            && let Err(error) = std::fs::create_dir_all(parent)
+        {
+            self.autosave.last_error = Some(error.to_string());
+            self.autosave.pending = true;
+            return Err(SessionError::Io(error));
         }
         let meta = autosave::build_meta(
             self.path.as_deref(),
@@ -489,11 +513,19 @@ impl Session {
         let params = Params::new(params)?;
         match id {
             ids::FILE_NEW => {
+                let confirm = params.boolean_or("confirm", false);
+                if self.dirty && !confirm {
+                    return Err(SessionError::UnsavedChanges);
+                }
                 self.new_document();
                 Ok(json!({"ok": true}))
             }
             ids::FILE_OPEN => {
                 let path = required_path(&params)?;
+                let confirm = params.boolean_or("confirm", false);
+                if self.dirty && !confirm {
+                    return Err(SessionError::UnsavedChanges);
+                }
                 self.open(&path)?;
                 Ok(self.info())
             }
@@ -692,6 +724,13 @@ fn store_recent(config_dir: &Path, recent: &[PathBuf]) {
     if let Ok(text) = serde_json::to_string_pretty(&values) {
         let _ = drawcraft_format::write_atomic(&path, text.as_bytes());
     }
+}
+
+/// True when both paths name the same file after canonicalize (symlink aliases).
+fn same_document_path(left: &Path, right: &Path) -> bool {
+    let left = std::fs::canonicalize(left).unwrap_or_else(|_| left.to_path_buf());
+    let right = std::fs::canonicalize(right).unwrap_or_else(|_| right.to_path_buf());
+    left == right
 }
 
 #[cfg(test)]
@@ -938,6 +977,72 @@ mod tests {
     }
 
     #[test]
+    fn save_as_overwrites_different_existing_path_and_blocks_same_path_drift() {
+        let (directory, mut session) = test_session();
+        let a = directory.path().join("a.drawcraft");
+        let b = directory.path().join("b.drawcraft");
+
+        // Pre-create B with different content so Save As must overwrite an existing file.
+        let mut other = Session::with_config_dir(directory.path().join("other"));
+        other
+            .execute(
+                ids::SHAPE_ADD,
+                &json!({"kind":"ellipse","x":0,"y":0,"width":8,"height":8}),
+            )
+            .unwrap();
+        other
+            .execute(ids::FILE_SAVE_AS, &json!({"path": b.display().to_string()}))
+            .unwrap();
+        drop(other);
+
+        session
+            .execute(
+                ids::SHAPE_ADD,
+                &json!({"kind":"rectangle","x":0,"y":0,"width":10,"height":10}),
+            )
+            .unwrap();
+        session
+            .execute(ids::FILE_SAVE_AS, &json!({"path": a.display().to_string()}))
+            .unwrap();
+        session
+            .execute(
+                ids::SHAPE_ADD,
+                &json!({"kind":"triangle","x":1,"y":1,"width":4,"height":4}),
+            )
+            .unwrap();
+
+        // Save As to existing B must succeed (different document identity).
+        session
+            .execute(ids::FILE_SAVE_AS, &json!({"path": b.display().to_string()}))
+            .unwrap();
+        assert_eq!(session.path.as_deref(), Some(b.as_path()));
+        assert!(!session.dirty);
+        assert_eq!(session.editor.doc.shapes().len(), 2);
+        let check = session.external_check().unwrap();
+        assert_eq!(check.get("changed").and_then(Value::as_bool), Some(false));
+
+        // Same-path external drift on the new current path must still be blocked.
+        let mut outsider = Session::with_config_dir(directory.path().join("outsider"));
+        outsider
+            .execute(
+                ids::SHAPE_ADD,
+                &json!({"kind":"ellipse","x":9,"y":9,"width":9,"height":9}),
+            )
+            .unwrap();
+        outsider
+            .execute(ids::FILE_SAVE_AS, &json!({"path": b.display().to_string()}))
+            .unwrap();
+        let newer = SystemTime::now() + Duration::from_secs(5);
+        let file = std::fs::File::options().write(true).open(&b).unwrap();
+        file.set_modified(newer).unwrap();
+
+        let check = session.external_check().unwrap();
+        assert_eq!(check.get("changed").and_then(Value::as_bool), Some(true));
+        let err = session.execute(ids::FILE_SAVE, &json!({})).unwrap_err();
+        assert!(matches!(err, SessionError::ExternalChange { .. }));
+    }
+
+    #[test]
     fn reload_and_keep_mine_paths() {
         let (directory, mut session) = test_session();
         let path = directory.path().join("reload.drawcraft");
@@ -1010,6 +1115,100 @@ mod tests {
                 panic!("{} fell through to editor UnknownCommand", command.id);
             }
         }
+    }
+
+    #[test]
+    fn dirty_new_and_open_keep_autosave_without_clearing() {
+        let (directory, mut session) = test_session();
+        let path = directory.path().join("keep.drawcraft");
+        session
+            .execute(
+                ids::SHAPE_ADD,
+                &json!({"kind":"rectangle","x":0,"y":0,"width":10,"height":10}),
+            )
+            .unwrap();
+        session
+            .execute(
+                ids::FILE_SAVE_AS,
+                &json!({"path": path.display().to_string()}),
+            )
+            .unwrap();
+        session
+            .execute(
+                ids::SHAPE_ADD,
+                &json!({"kind":"ellipse","x":1,"y":1,"width":5,"height":5}),
+            )
+            .unwrap();
+        session
+            .execute(ids::SESSION_AUTOSAVE_NOW, &json!({}))
+            .unwrap();
+        let autosave = session.autosave_path();
+        assert!(autosave.exists());
+
+        // Without confirm, dirty New/Open must refuse and leave the autosave.
+        assert!(matches!(
+            session.execute(ids::FILE_NEW, &json!({})),
+            Err(SessionError::UnsavedChanges)
+        ));
+        assert!(autosave.exists());
+        let other = directory.path().join("other.drawcraft");
+        std::fs::write(
+            &other,
+            drawcraft_format::to_json(&session.editor.doc).unwrap(),
+        )
+        .unwrap();
+        assert!(matches!(
+            session.execute(
+                ids::FILE_OPEN,
+                &json!({"path": other.display().to_string()})
+            ),
+            Err(SessionError::UnsavedChanges)
+        ));
+        assert!(autosave.exists());
+
+        // Confirmed New succeeds and keeps the recovery autosave on disk.
+        session
+            .execute(ids::FILE_NEW, &json!({"confirm": true}))
+            .unwrap();
+        assert!(!session.dirty);
+        assert!(session.path.is_none());
+        assert!(
+            autosave.exists(),
+            "confirmed New must not wipe recovery autosave"
+        );
+        let list = session.recover_list();
+        assert!(
+            list.get("candidates")
+                .and_then(Value::as_array)
+                .is_some_and(|c| !c.is_empty()),
+            "kept autosave should remain recoverable"
+        );
+    }
+
+    #[test]
+    fn autosave_write_failure_keeps_pending_and_surfaces_error() {
+        let (_directory, mut session) = test_session();
+        session
+            .execute(
+                ids::SHAPE_ADD,
+                &json!({"kind":"rectangle","x":0,"y":0,"width":10,"height":10}),
+            )
+            .unwrap();
+        // Replace the autosave directory with a plain file so writes fail.
+        let autosave_dir = super::autosave::autosave_dir(session.config_dir());
+        let _ = std::fs::remove_dir_all(&autosave_dir);
+        std::fs::create_dir_all(autosave_dir.parent().unwrap()).unwrap();
+        std::fs::write(&autosave_dir, b"not-a-directory").unwrap();
+
+        let err = session
+            .execute(ids::SESSION_AUTOSAVE_NOW, &json!({}))
+            .unwrap_err();
+        assert!(matches!(err, SessionError::Io(_) | SessionError::Format(_)));
+        assert!(session.autosave.pending, "failed write must keep pending");
+        assert!(session.autosave.last_error.is_some());
+        let status = session.autosave_status();
+        assert!(status.get("last_error").and_then(Value::as_str).is_some());
+        assert_eq!(status.get("pending").and_then(Value::as_bool), Some(true));
     }
 
     #[test]

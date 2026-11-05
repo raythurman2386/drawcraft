@@ -4,7 +4,7 @@ use drawcraft_document::{Rect, ShapeId, ShapeRecord, Vec2};
 use drawcraft_editor::Tool;
 use egui::TextureHandle;
 
-use crate::lifecycle::{ExternalChangePrompt, RecoveryPrompt};
+use crate::lifecycle::{ExternalChangePrompt, LeaveDirtyPrompt, RecoveryPrompt};
 
 /// Which resize handle the pointer is dragging.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -147,6 +147,7 @@ pub struct UiState {
     pub last_error: Option<String>,
     pub recovery_prompt: Option<RecoveryPrompt>,
     pub external_change_prompt: Option<ExternalChangePrompt>,
+    pub leave_dirty_prompt: Option<LeaveDirtyPrompt>,
 }
 
 impl UiState {
