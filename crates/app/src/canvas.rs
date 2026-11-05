@@ -5,8 +5,9 @@ use drawcraft_editor::{Tool, default_style_for, linear_create_drag_commits};
 use drawcraft_geometry::Camera;
 use drawcraft_render::{Path, TextAlign, build_scene, triangulate};
 use egui::{
-    Align2, Color32, CornerRadius, CursorIcon, FontId, Id, Key, Mesh, Pos2, Rect as EguiRect,
-    Sense, Stroke, StrokeKind, TextureHandle, TextureOptions, Vec2 as EVec2, pos2, vec2,
+    Align2, Color32, CornerRadius, CursorIcon, FontId, Frame, Id, Key, Mesh, Pos2,
+    Rect as EguiRect, Sense, Stroke, StrokeKind, TextureHandle, TextureOptions, Vec2 as EVec2,
+    pos2, vec2,
 };
 use serde_json::json;
 
@@ -77,7 +78,7 @@ impl DrawCraftApp {
             self.state.last_pointer_world = view.to_world(to_vec2(pointer - rect.min));
         }
         self.update_cursor(ui, &response, rect, view, pointer);
-        self.paint_inline_text_edit(ui, view);
+        self.paint_inline_text_edit(ui, view, &palette);
     }
 
     fn handle_viewport_input(
@@ -460,7 +461,7 @@ impl DrawCraftApp {
 
     /// Render an inline text editor directly on the canvas over the shape being
     /// edited. Handles commit (Enter / lost focus) and cancel (Escape).
-    fn paint_inline_text_edit(&mut self, ui: &mut egui::Ui, view: View) {
+    fn paint_inline_text_edit(&mut self, ui: &mut egui::Ui, view: View, palette: &theme::Palette) {
         let Some(edit) = self.state.inline_text_edit.as_mut() else {
             return;
         };
@@ -470,20 +471,26 @@ impl DrawCraftApp {
         };
 
         let base_rect = shape.rect();
-        let text_rect = match shape.kind {
-            ShapeKind::Text => drawcraft_document::Rect::from_xywh(
-                base_rect.min.x + 4.0,
-                base_rect.min.y + 2.0,
-                base_rect.width().max(24.0),
-                base_rect.height(),
+        let (inner_padding, text_rect) = match shape.kind {
+            ShapeKind::Text => (
+                6.0,
+                drawcraft_document::Rect::from_xywh(
+                    base_rect.min.x + 4.0,
+                    base_rect.min.y + 2.0,
+                    base_rect.width().max(24.0),
+                    base_rect.height(),
+                ),
             ),
-            ShapeKind::Sticky | ShapeKind::Note => drawcraft_document::Rect::from_xywh(
-                base_rect.min.x + 16.0,
-                base_rect.min.y + 16.0,
-                (base_rect.width() - 32.0).max(24.0),
-                base_rect.height(),
+            ShapeKind::Sticky | ShapeKind::Note => (
+                10.0,
+                drawcraft_document::Rect::from_xywh(
+                    base_rect.min.x + 16.0,
+                    base_rect.min.y + 16.0,
+                    (base_rect.width() - 32.0).max(24.0),
+                    base_rect.height(),
+                ),
             ),
-            _ => base_rect,
+            _ => return,
         };
         let screen_rect = view.rect(text_rect);
 
@@ -496,23 +503,58 @@ impl DrawCraftApp {
             .fixed_pos(screen_rect.min)
             .show(ui.ctx(), |ui| {
                 ui.set_min_size(screen_rect.size());
-                let response = ui.add(
-                    egui::TextEdit::singleline(&mut edit.text)
-                        .id_source(area_id)
-                        .desired_width(screen_rect.width().max(100.0)),
-                );
-                if response.has_focus() {
-                    ui.ctx().memory_mut(|mem| mem.request_focus(area_id));
-                }
-                if response.lost_focus() {
-                    commit = true;
-                }
-                if ui.input(|i| i.key_pressed(Key::Enter)) {
-                    commit = true;
-                }
-                if ui.input(|i| i.key_pressed(Key::Escape)) {
-                    cancel = true;
-                }
+
+                let focused = ui.ctx().memory(|mem| mem.has_focus(area_id));
+
+                // Background frame: readable over any fill, with a focus ring.
+                let frame = Frame::new()
+                    .fill(palette.surface)
+                    .stroke(Stroke::new(
+                        1.0,
+                        if focused {
+                            palette.accent
+                        } else {
+                            palette.muted
+                        },
+                    ))
+                    .inner_margin(inner_padding)
+                    .corner_radius(4.0);
+
+                frame.show(ui, |ui| {
+                    let desired_width = (screen_rect.width() - 2.0 * inner_padding).max(80.0);
+                    let response = ui.add(
+                        if matches!(shape.kind, ShapeKind::Sticky | ShapeKind::Note) {
+                            egui::TextEdit::multiline(&mut edit.text)
+                                .id_source(area_id)
+                                .desired_width(desired_width)
+                                .desired_rows(4)
+                                .hint_text("Type here…")
+                        } else {
+                            egui::TextEdit::singleline(&mut edit.text)
+                                .id_source(area_id)
+                                .desired_width(desired_width)
+                                .hint_text("Type here…")
+                        },
+                    );
+                    if response.has_focus() {
+                        ui.ctx().memory_mut(|mem| mem.request_focus(area_id));
+                    }
+                    if response.lost_focus() {
+                        commit = true;
+                    }
+                    if ui.input(|i| i.key_pressed(Key::Enter)) {
+                        if matches!(shape.kind, ShapeKind::Sticky | ShapeKind::Note) {
+                            if !ui.input(|i| i.modifiers.shift) {
+                                commit = true;
+                            }
+                        } else {
+                            commit = true;
+                        }
+                    }
+                    if ui.input(|i| i.key_pressed(Key::Escape)) {
+                        cancel = true;
+                    }
+                });
             });
 
         if cancel {
