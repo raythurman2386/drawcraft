@@ -11,6 +11,7 @@
 pub mod app;
 pub mod canvas;
 pub mod icons;
+pub mod inline_edit;
 pub mod panels;
 pub mod state;
 pub mod theme;

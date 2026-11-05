@@ -213,10 +213,10 @@ impl DrawCraftApp {
         card(ui, p, |ui| {
             ui.horizontal_wrapped(|ui| {
                 if action_button(ui, p, "Edit text").clicked() {
-                    self.state.inline_text_edit = Some(InlineTextEdit {
-                        id: selected.id.clone(),
-                        text: selected.display_text().to_owned(),
-                    });
+                    self.state.inline_text_edit = Some(InlineTextEdit::new(
+                        selected.id.clone(),
+                        selected.display_text().to_owned(),
+                    ));
                 }
                 if action_button(ui, p, "Duplicate").clicked() {
                     self.run(ids::EDIT_DUPLICATE, json!({}));

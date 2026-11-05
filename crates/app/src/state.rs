@@ -107,6 +107,23 @@ pub enum DragState {
 pub struct InlineTextEdit {
     pub id: ShapeId,
     pub text: String,
+    /// Focus has been requested on the text field (done once, on the first
+    /// frame after the editor opens).
+    pub focus_requested: bool,
+    /// The text field held keyboard focus at the end of the previous frame.
+    pub had_focus: bool,
+}
+
+impl InlineTextEdit {
+    /// Open an editor for `id`, seeded with its current text.
+    pub fn new(id: ShapeId, text: String) -> Self {
+        Self {
+            id,
+            text,
+            focus_requested: false,
+            had_focus: false,
+        }
+    }
 }
 
 /// Per-window UI state that is not part of the document.

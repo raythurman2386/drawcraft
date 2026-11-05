@@ -160,7 +160,9 @@ impl DrawCraftApp {
             }
             return;
         }
-        if ctx.egui_wants_keyboard_input() {
+        // While the inline text editor is open, keys belong to it: never let
+        // tool/delete shortcuts act on the selection underneath.
+        if self.state.inline_text_edit.is_some() || ctx.egui_wants_keyboard_input() {
             return;
         }
         let command = ctx.input(|input| input.modifiers.command);
