@@ -247,16 +247,35 @@ fn fuzz(args: &[String]) -> Result<()> {
     if !matches!(cargo_fuzz, Ok(status) if status.success()) {
         return Err("xtask fuzz requires cargo-fuzz (cargo install cargo-fuzz --locked)".into());
     }
+    // cargo-fuzz defaults --target to its own compile-time triple. Musl-static
+    // installs (e.g. cargo-binstall / taiki-e) would otherwise try ASAN+musl.
+    let host = nightly_host_triple()?;
+    let max_total_time = format!("-max_total_time={secs}");
     let mut command = Command::new("cargo");
     command.current_dir(&fuzz_dir).args([
         "+nightly",
         "fuzz",
         "run",
         "from_json",
+        "--target",
+        &host,
         "--",
-        &format!("-max_total_time={secs}"),
+        &max_total_time,
     ]);
     status(command)
+}
+
+fn nightly_host_triple() -> Result<String> {
+    let output = Command::new("rustup")
+        .args(["run", "nightly", "rustc", "-vV"])
+        .output()?;
+    if !output.status.success() {
+        return Err("failed to query nightly rustc host triple".into());
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    text.lines()
+        .find_map(|line| line.strip_prefix("host: ").map(str::to_owned))
+        .ok_or_else(|| "nightly rustc -vV missing host line".into())
 }
 
 fn wasm() -> Result<()> {
