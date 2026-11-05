@@ -20,6 +20,7 @@ All notable changes to DrawCraft are documented here.
 - Polyline is now a real multi-segment polyline instead of duplicating Line.
 - Note shapes render with a folded corner instead of a plain rectangle.
 - Sticky notes create with "Sticky" text instead of "Note".
+- Axis-aligned Arrow/Line drags now commit (create gate uses drag length, not bounding-box width AND height); arrow preview and commit share one center-to-center endpoint resolver and skip linear snap targets.
 
 ## [0.2.0] — 2026-11-04
 

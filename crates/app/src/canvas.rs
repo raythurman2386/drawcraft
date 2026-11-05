@@ -1,6 +1,6 @@
 use base64::Engine as _;
 use drawcraft_document::{Dash, Rect as DocRect, ShapeId, ShapeKind, ShapeRecord, Vec2};
-use drawcraft_editor::{Tool, default_style_for};
+use drawcraft_editor::{Tool, default_style_for, linear_create_drag_commits};
 use drawcraft_geometry::Camera;
 use drawcraft_render::{Path, TextAlign, build_scene, triangulate};
 use egui::{
@@ -369,24 +369,13 @@ impl DrawCraftApp {
         self.state.drag = Some(drag);
     }
 
-    /// If either arrow end rests near a shape, snap it to that shape's anchor
-    /// facing the other end so the preview shows the bound endpoint.
+    /// Snap arrow drag endpoints via the shared editor resolver (preview == commit).
     #[must_use]
     fn arrow_preview_endpoints(&self, start: Vec2, current: Vec2, zoom: f64) -> (Vec2, Vec2) {
         let tolerance = 12.0 / zoom.max(0.1);
-        let mut start = start;
-        let mut end = current;
-        if let Some(id) = self.session.editor.topmost_at(start, tolerance) {
-            if let Some(shape) = self.session.editor.doc.shape(&id) {
-                start = shape.anchor_toward(end);
-            }
-        }
-        if let Some(id) = self.session.editor.topmost_at(end, tolerance) {
-            if let Some(shape) = self.session.editor.doc.shape(&id) {
-                end = shape.anchor_toward(start);
-            }
-        }
-        (start, end)
+        self.session
+            .editor
+            .arrow_endpoints_for_drag(start, current, tolerance)
     }
 
     fn finish_drag(&mut self, _ui: &egui::Ui, world: Vec2) {
@@ -414,11 +403,12 @@ impl DrawCraftApp {
                 start,
                 current,
             } => {
-                if matches!(tool, Tool::Arrow | Tool::Line | Tool::Polyline) {
-                    // Linear tools are placed by dragging. Ignore accidental tiny
-                    // drags and never fall back to a fixed-size default box.
-                    let rect = DocRect::new(start, current);
-                    if rect.width() >= 3.0 && rect.height() >= 3.0 {
+                // Polyline starts DragState::Freehand, so only Arrow|Line land here.
+                if matches!(tool, Tool::Arrow | Tool::Line) {
+                    // Linear tools are placed by dragging. Gate on drag length so
+                    // axis-aligned (horizontal/vertical) strokes still commit.
+                    // Ignore accidental tiny drags; never fall back to a default box.
+                    if linear_create_drag_commits(start, current) {
                         if tool == Tool::Arrow {
                             let (start_snapped, end_snapped) = self.arrow_preview_endpoints(
                                 start,
@@ -495,11 +485,9 @@ impl DrawCraftApp {
             Tool::Lasso => {}
             Tool::Hand => {}
             _ => {
-                // Drag-based tools (Arrow, Line, Polyline) are placed by dragging,
-                // not by a single click, so a click places nothing for them.
-                if tool.is_shape_tool()
-                    && !matches!(tool, Tool::Arrow | Tool::Line | Tool::Polyline)
-                {
+                // Drag-based linear tools (Arrow, Line) and freehand tools that
+                // reach this arm (Polyline) are not placed by a single click.
+                if tool.is_shape_tool() && !tool.is_linear_tool() {
                     let rect = default_rect(tool, world);
                     self.create_with_tool(tool, rect, None);
                 }
