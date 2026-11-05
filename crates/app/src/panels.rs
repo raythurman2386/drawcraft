@@ -9,7 +9,7 @@ use serde_json::json;
 
 use crate::app::DrawCraftApp;
 use crate::icons;
-use crate::state::TextEditor;
+use crate::state::InlineTextEdit;
 use crate::theme::{self, Palette};
 
 impl DrawCraftApp {
@@ -213,7 +213,7 @@ impl DrawCraftApp {
         card(ui, p, |ui| {
             ui.horizontal_wrapped(|ui| {
                 if action_button(ui, p, "Edit text").clicked() {
-                    self.state.text_edit = Some(TextEditor {
+                    self.state.inline_text_edit = Some(InlineTextEdit {
                         id: selected.id.clone(),
                         text: selected.display_text().to_owned(),
                     });

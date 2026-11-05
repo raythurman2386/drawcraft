@@ -11,6 +11,7 @@ All notable changes to DrawCraft are documented here.
 - One group-level shift rule for click, marquee, and lasso (groups are atomic toggle units).
 - Marquee now expands to the full group, matching click selection.
 - Project-local verification skill `.cursor/skills/verify-drawcraft/` (CLI/MCP + Xvfb GUI drive recipes, helper scripts, selection feature map) and GUI lasso proof at `docs/proof/lasso-gesture.png`.
+- Inline canvas text editing for Text, Sticky, and Note shapes: double-click or use "Edit text" to edit directly on the canvas instead of a floating popup. Enter commits, Escape cancels.
 
 ### Fixed
 

@@ -102,9 +102,9 @@ pub enum DragState {
     Erase { last: Vec2 },
 }
 
-/// Floating text editor for a shape.
+/// Inline text editor for a shape, placed directly on the canvas.
 #[derive(Clone, Debug)]
-pub struct TextEditor {
+pub struct InlineTextEdit {
     pub id: ShapeId,
     pub text: String,
 }
@@ -113,7 +113,7 @@ pub struct TextEditor {
 #[derive(Default)]
 pub struct UiState {
     pub drag: Option<DragState>,
-    pub text_edit: Option<TextEditor>,
+    pub inline_text_edit: Option<InlineTextEdit>,
     pub hover: Option<ShapeId>,
     pub last_pointer_world: Vec2,
     pub textures: HashMap<ShapeId, TextureHandle>,
