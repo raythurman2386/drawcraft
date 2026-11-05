@@ -15,6 +15,7 @@ use crate::app::DrawCraftApp;
 use crate::inline_edit::{self, InlineEditAction, InlineKey};
 use crate::state::{DragState, InlineTextEdit, ResizeHandle};
 use crate::theme;
+use crate::transform;
 
 /// A camera plus the screen-space origin of the canvas within the window.
 #[derive(Copy, Clone)]
@@ -224,6 +225,7 @@ impl DrawCraftApp {
                     self.state.drag = Some(DragState::Rotate {
                         pivot,
                         start_angle,
+                        angle: 0.0,
                         original,
                     });
                     return;
@@ -346,17 +348,26 @@ impl DrawCraftApp {
                 original,
                 ..
             } => {
-                let (anchor, scale) = resize_scale(*handle, *start_bounds, world);
+                let modifiers = ui.input(|input| transform::ResizeModifiers {
+                    keep_aspect: input.modifiers.shift,
+                    from_centre: input.modifiers.alt,
+                });
+                let (anchor, scale) =
+                    transform::resize_scale(*handle, *start_bounds, world, modifiers);
                 self.apply_resize(original, anchor, scale);
             }
             DragState::Rotate {
                 pivot,
                 start_angle,
+                angle,
                 original,
             } => {
-                let angle = (world.y - pivot.y).atan2(world.x - pivot.x) - *start_angle;
-                self.apply_rotate(original, *pivot, angle);
+                let snap = ui.input(|input| input.modifiers.shift);
+                let raw = (world.y - pivot.y).atan2(world.x - pivot.x) - *start_angle;
+                *angle = transform::rotate_angle(raw, snap);
+                self.apply_rotate(original, *pivot, *angle);
             }
+
             DragState::Erase { last } => {
                 let step = (world - *last).length();
                 if step < 1.0 / self.session.editor.camera.zoom.max(0.1) {
@@ -373,6 +384,27 @@ impl DrawCraftApp {
                     let _ = self.session.editor.delete_shape(&id);
                 }
             }
+        }
+        // Mirror the live transform readout in the status bar.
+        let readout_angle = match &drag {
+            DragState::Rotate { angle, .. } => Some(*angle),
+            DragState::Resize { .. } => Some(0.0),
+            _ => None,
+        };
+        if let Some(angle) = readout_angle {
+            let size = self
+                .session
+                .editor
+                .selection_bounds()
+                .map(|bounds| bounds.size())
+                .unwrap_or_default();
+            let verb = if matches!(drag, DragState::Rotate { .. }) {
+                "Rotate"
+            } else {
+                "Resize"
+            };
+            self.state
+                .set_status(format!("{verb} {}", transform::readout(size, angle)));
         }
         self.state.drag = Some(drag);
     }
@@ -869,10 +901,14 @@ impl DrawCraftApp {
                     .selection_bounds()
                     .map(|bounds| bounds.size())
                     .unwrap_or_default();
-                let label = format!("{:.0}  ×  {:.0}", world.x, world.y);
+                let angle = match &self.state.drag {
+                    Some(DragState::Rotate { angle, .. }) => *angle,
+                    _ => 0.0,
+                };
+                let label = transform::readout(world, angle);
                 let label_rect = EguiRect::from_min_size(
-                    pos2(bounds.left(), bounds.top() - 26.0),
-                    vec2(78.0, 18.0),
+                    pos2(bounds.left(), bounds.bottom() + 8.0),
+                    vec2(112.0, 18.0),
                 );
                 painter.rect_filled(label_rect, CornerRadius::same(5), palette.surface);
                 painter.rect_stroke(
@@ -1151,39 +1187,6 @@ fn paint_tool_hint(painter: &egui::Painter, view: View, tool: Tool, p: theme::Pa
         FontId::proportional(10.0),
         p.muted,
     );
-}
-
-fn resize_scale(handle: ResizeHandle, bounds: DocRect, pointer: Vec2) -> (Vec2, Vec2) {
-    let width = bounds.width().max(1.0);
-    let height = bounds.height().max(1.0);
-    let mut scale_x = 1.0;
-    let mut scale_y = 1.0;
-    let anchor = Vec2::new(
-        if handle.is_west() {
-            bounds.max.x
-        } else {
-            bounds.min.x
-        },
-        if handle.is_north() {
-            bounds.max.y
-        } else {
-            bounds.min.y
-        },
-    );
-    if handle.is_east() {
-        scale_x = (pointer.x - bounds.min.x) / width;
-    } else if handle.is_west() {
-        scale_x = (bounds.max.x - pointer.x) / width;
-    }
-    if handle.is_south() {
-        scale_y = (pointer.y - bounds.min.y) / height;
-    } else if handle.is_north() {
-        scale_y = (bounds.max.y - pointer.y) / height;
-    }
-    (
-        anchor,
-        Vec2::new(scale_x.clamp(0.02, 50.0), scale_y.clamp(0.02, 50.0)),
-    )
 }
 
 fn default_rect(tool: Tool, at: Vec2) -> DocRect {

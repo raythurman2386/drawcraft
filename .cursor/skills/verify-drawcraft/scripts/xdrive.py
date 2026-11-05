@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Minimal XTest driver (no xdotool needed). Usage:
-  xdrive.py move X Y | down | up | key KEYSYM | drag X1 Y1 X2 Y2 ... (polyline, button held, release at end)
+  xdrive.py move X Y | down | up | key KEYSYM | keydown KEYSYM | keyup KEYSYM | drag X1 Y1 X2 Y2 ... (polyline, button held, release at end)
   xdrive.py dragpath --hold "x,y x,y ..."   (press, move along path, leave button held)
 """
 import ctypes, sys, time
@@ -18,6 +18,9 @@ def key(name):
     kc = X.XKeysymToKeycode(d, X.XStringToKeysym(name.encode()))
     T.XTestFakeKeyEvent(d, kc, 1, 0); flush(); time.sleep(0.05)
     T.XTestFakeKeyEvent(d, kc, 0, 0); flush()
+def keyev(name, down):
+    kc = X.XKeysymToKeycode(d, X.XStringToKeysym(name.encode()))
+    T.XTestFakeKeyEvent(d, kc, 1 if down else 0, 0); flush()
 def path(pts, release):
     move(*pts[0]); time.sleep(0.15); btn(True); time.sleep(0.1)
     for (x0,y0),(x1,y1) in zip(pts, pts[1:]):
@@ -37,6 +40,8 @@ if a[0] == "move": move(a[1], a[2])
 elif a[0] == "down": btn(True)
 elif a[0] == "up": btn(False)
 elif a[0] == "key": key(a[1])
+elif a[0] == "keydown": keyev(a[1], True)
+elif a[0] == "keyup": keyev(a[1], False)
 elif a[0] == "focus": focus_under_pointer()
 elif a[0] in ("drag", "dragpath"):
     hold = "--hold" in a

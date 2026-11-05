@@ -96,6 +96,8 @@ pub enum DragState {
     Rotate {
         pivot: Vec2,
         start_angle: f64,
+        /// Applied angle this frame (after optional Shift snap), for the readout.
+        angle: f64,
         original: Vec<ShapeRecord>,
     },
     /// Erasing shapes under the pointer.

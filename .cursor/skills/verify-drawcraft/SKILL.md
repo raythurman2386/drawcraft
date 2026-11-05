@@ -90,7 +90,8 @@ like; never delete `$P/*.json` or `$P/*.png` evidence.
 | `scripts/seed-board.sh FILE` | Fresh board: A rect (0,0 160x110), B ellipse (220,0), C rect (440,0). |
 | `scripts/lasso-cli.sh P` | Seeds `P/board.drawcraft`, runs `edit.select_lasso` via `run` and via MCP + `doc.info`, asserts count 2 / selection 2. Exit 0 = pass. |
 | `scripts/gui-lasso.sh P` | Xvfb :99 + GUI, Q, freehand lasso around A+B, screenshots `P/lasso-drag.png`, `P/lasso-selected.png`, then kills its own PIDs. |
-| `scripts/xdrive.py` | XTest mouse/keyboard driver used by the GUI script. |
+| `scripts/gui-transform.sh P` | Xvfb :99 + GUI, five transform cases (corner free/Shift, edge Alt, rotate free/Shift), mid-drag + after screenshots. |
+| `scripts/xdrive.py` | XTest mouse/keyboard driver (`keydown`/`keyup` for held modifiers). |
 
 All need `DRAWCRAFT_BIN` (default `target/debug/drawcraft`). GUI needs `Xvfb`, ImageMagick `import`, `libXtst`.
 
