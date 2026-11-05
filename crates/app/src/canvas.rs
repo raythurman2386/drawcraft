@@ -1,15 +1,19 @@
 use base64::Engine as _;
+use drawcraft_command::ids;
 use drawcraft_document::{Dash, Rect as DocRect, ShapeId, ShapeKind, ShapeRecord, Vec2};
 use drawcraft_editor::{Tool, default_style_for, linear_create_drag_commits};
 use drawcraft_geometry::Camera;
 use drawcraft_render::{Path, TextAlign, build_scene, triangulate};
 use egui::{
-    Align2, Color32, CornerRadius, CursorIcon, FontId, Key, Mesh, Pos2, Rect as EguiRect, Sense,
-    Stroke, StrokeKind, TextureHandle, TextureOptions, Vec2 as EVec2, pos2, vec2,
+    Align2, Color32, CornerRadius, CursorIcon, FontId, Frame, Id, Key, Mesh, Pos2,
+    Rect as EguiRect, Sense, Stroke, StrokeKind, TextureHandle, TextureOptions, Vec2 as EVec2,
+    pos2, vec2,
 };
+use serde_json::json;
 
 use crate::app::DrawCraftApp;
-use crate::state::{DragState, ResizeHandle, TextEditor};
+use crate::inline_edit::{self, InlineEditAction, InlineKey};
+use crate::state::{DragState, InlineTextEdit, ResizeHandle};
 use crate::theme;
 
 /// A camera plus the screen-space origin of the canvas within the window.
@@ -75,6 +79,7 @@ impl DrawCraftApp {
             self.state.last_pointer_world = view.to_world(to_vec2(pointer - rect.min));
         }
         self.update_cursor(ui, &response, rect, view, pointer);
+        self.paint_inline_text_edit(ui, view, &palette);
     }
 
     fn handle_viewport_input(
@@ -135,6 +140,11 @@ impl DrawCraftApp {
         if space || middle {
             return;
         }
+        if self.state.inline_text_edit.is_some() {
+            // Inline text editing consumes all pointer input; the inline editor
+            // handles commit/cancel via its own focus handling.
+            return;
+        }
         self.state.hover = self.session.editor.topmost_at(world, 3.0 / camera.zoom);
 
         if response.drag_started() {
@@ -155,10 +165,8 @@ impl DrawCraftApp {
             if let Some(id) = self.session.editor.topmost_at(world, 3.0 / camera.zoom) {
                 if let Some(shape) = self.session.editor.doc.shape(&id) {
                     if shape.kind.has_text() {
-                        self.state.text_edit = Some(TextEditor {
-                            id,
-                            text: shape.display_text().to_owned(),
-                        });
+                        self.state.inline_text_edit =
+                            Some(InlineTextEdit::new(id, shape.display_text().to_owned()));
                     }
                 }
             }
@@ -450,6 +458,165 @@ impl DrawCraftApp {
         let _ = world;
     }
 
+    /// Render an inline text editor directly on the canvas over the shape being
+    /// edited. Handles commit (Enter / lost focus), Shift+Enter newlines in
+    /// Sticky/Note, and cancel (Escape); see [`inline_edit::decide`].
+    fn paint_inline_text_edit(&mut self, ui: &mut egui::Ui, view: View, palette: &theme::Palette) {
+        let Some(edit) = self.state.inline_text_edit.as_mut() else {
+            return;
+        };
+        let Some(shape) = self.session.editor.doc.shape(&edit.id) else {
+            self.state.inline_text_edit = None;
+            return;
+        };
+
+        let base_rect = shape.rect();
+        let (inner_padding, text_rect) = match shape.kind {
+            ShapeKind::Text => (
+                6.0,
+                drawcraft_document::Rect::from_xywh(
+                    base_rect.min.x + 4.0,
+                    base_rect.min.y + 2.0,
+                    base_rect.width().max(24.0),
+                    base_rect.height(),
+                ),
+            ),
+            ShapeKind::Sticky | ShapeKind::Note => (
+                10.0,
+                drawcraft_document::Rect::from_xywh(
+                    base_rect.min.x + 16.0,
+                    base_rect.min.y + 16.0,
+                    (base_rect.width() - 32.0).max(24.0),
+                    base_rect.height(),
+                ),
+            ),
+            _ => return,
+        };
+        let screen_rect = view.rect(text_rect);
+
+        let area_id = Id::new("inline_text_edit").with(edit.id.clone());
+        // Distinct from the Area id: sharing one id between the Area and the
+        // TextEdit makes their interactions collide.
+        let text_id = area_id.with("text");
+        let multiline = matches!(shape.kind, ShapeKind::Sticky | ShapeKind::Note);
+
+        // Enter/Escape belong to the editor only while it owns the keyboard.
+        // `had_focus` covers Escape, which egui uses to drop focus before
+        // widgets run; "nobody focused" covers the frame before focus lands.
+        let owns_keyboard = edit.had_focus
+            || ui
+                .ctx()
+                .memory(|mem| mem.has_focus(text_id) || mem.focused().is_none());
+        let key = ui.input(|input| {
+            input.events.iter().find_map(|event| match event {
+                egui::Event::Key {
+                    key: Key::Enter,
+                    pressed: true,
+                    modifiers,
+                    ..
+                } => Some(InlineKey::Enter {
+                    shift: modifiers.shift,
+                }),
+                egui::Event::Key {
+                    key: Key::Escape,
+                    pressed: true,
+                    ..
+                } => Some(InlineKey::Escape),
+                _ => None,
+            })
+        });
+        let key_action = inline_edit::decide(multiline, owns_keyboard, key, false);
+        if key_action.closes() {
+            // Consume the key before the TextEdit runs so a multiline field
+            // never inserts a stray newline on the committing Enter.
+            ui.input_mut(|input| {
+                input.events.retain(|event| {
+                    !matches!(
+                        event,
+                        egui::Event::Key {
+                            key: Key::Enter | Key::Escape,
+                            pressed: true,
+                            ..
+                        }
+                    )
+                });
+            });
+        }
+
+        let mut lost_focus = false;
+        let mut has_focus = false;
+        let focus_requested = &mut edit.focus_requested;
+        let text = &mut edit.text;
+
+        egui::Area::new(area_id)
+            .fixed_pos(screen_rect.min)
+            .show(ui.ctx(), |ui| {
+                ui.set_min_size(screen_rect.size());
+
+                // Background frame: readable over any fill. The focus ring is
+                // set after the TextEdit runs, from its own response.
+                let mut prepared = Frame::new()
+                    .fill(palette.surface)
+                    .stroke(Stroke::new(1.0, palette.muted))
+                    .inner_margin(inner_padding)
+                    .corner_radius(4.0)
+                    .begin(ui);
+                {
+                    let ui = &mut prepared.content_ui;
+                    let desired_width = (screen_rect.width() - 2.0 * inner_padding).max(80.0);
+                    let widget = if multiline {
+                        egui::TextEdit::multiline(text)
+                            .id(text_id)
+                            .desired_width(desired_width)
+                            .desired_rows(4)
+                            .hint_text("Type here…")
+                    } else {
+                        egui::TextEdit::singleline(text)
+                            .id(text_id)
+                            .desired_width(desired_width)
+                            .hint_text("Type here…")
+                    };
+                    let response = ui.add(widget);
+                    if !*focus_requested {
+                        response.request_focus();
+                        *focus_requested = true;
+                    }
+                    lost_focus = response.lost_focus();
+                    has_focus = response.has_focus();
+                }
+                if has_focus {
+                    prepared.frame.stroke = Stroke::new(1.0, palette.accent);
+                }
+                prepared.end(ui);
+            });
+        edit.had_focus = has_focus;
+
+        let action = if key_action.closes() {
+            key_action
+        } else {
+            inline_edit::decide(multiline, owns_keyboard, None, lost_focus)
+        };
+        if !action.closes() {
+            return;
+        }
+        let id = edit.id.clone();
+        let edited = std::mem::take(&mut edit.text);
+        self.state.inline_text_edit = None;
+        ui.ctx().memory_mut(|mem| mem.surrender_focus(text_id));
+        if action == InlineEditAction::Commit {
+            let current = self
+                .session
+                .editor
+                .doc
+                .shape(&id)
+                .map(|shape| shape.display_text().to_owned())
+                .unwrap_or_default();
+            if let Some(text) = inline_edit::committed_text(&current, &edited) {
+                self.run(ids::SHAPE_SET_TEXT, json!({"id": id, "text": text}));
+            }
+        }
+    }
+
     fn handle_click(&mut self, ui: &egui::Ui, world: Vec2, view: View) {
         let tool = self.session.editor.tool;
         let camera = view.camera;
@@ -537,10 +704,7 @@ impl DrawCraftApp {
                 .shape(&id)
                 .map(|shape| shape.display_text().to_owned())
                 .unwrap_or_default();
-            self.state.text_edit = Some(TextEditor {
-                id: id.clone(),
-                text,
-            });
+            self.state.inline_text_edit = Some(InlineTextEdit::new(id.clone(), text));
         }
         Some(id)
     }

@@ -160,7 +160,9 @@ impl DrawCraftApp {
             }
             return;
         }
-        if ctx.egui_wants_keyboard_input() {
+        // While the inline text editor is open, keys belong to it: never let
+        // tool/delete shortcuts act on the selection underneath.
+        if self.state.inline_text_edit.is_some() || ctx.egui_wants_keyboard_input() {
             return;
         }
         let command = ctx.input(|input| input.modifiers.command);
@@ -310,50 +312,6 @@ impl DrawCraftApp {
             }
         }
     }
-
-    fn show_text_editor(&mut self, ctx: &egui::Context) {
-        let Some(mut editor) = self.state.text_edit.take() else {
-            return;
-        };
-        if self.session.editor.doc.shape(&editor.id).is_none() {
-            return;
-        }
-        let mut open = true;
-        let mut apply = false;
-        let mut close = false;
-        egui::Window::new("Edit text")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(true)
-            .default_width(360.0)
-            .show(ctx, |ui| {
-                let response = ui.add(
-                    egui::TextEdit::multiline(&mut editor.text)
-                        .desired_width(f32::INFINITY)
-                        .desired_rows(6),
-                );
-                if response.has_focus() && ui.input(|input| input.key_pressed(Key::Enter)) {
-                    if ui.input(|input| input.modifiers.command) {
-                        apply = true;
-                    }
-                }
-                ui.horizontal(|ui| {
-                    if ui.button("Apply").clicked() {
-                        apply = true;
-                    }
-                    if ui.button("Cancel").clicked() {
-                        close = true;
-                    }
-                    ui.label("Cmd+Enter applies");
-                });
-            });
-        if apply {
-            let text = editor.text.clone();
-            self.run(ids::SHAPE_SET_TEXT, json!({"id": editor.id, "text": text}));
-        } else if open && !close {
-            self.state.text_edit = Some(editor);
-        }
-    }
 }
 
 impl eframe::App for DrawCraftApp {
@@ -380,7 +338,6 @@ impl eframe::App for DrawCraftApp {
         egui::CentralPanel::default().show(ui, |ui| {
             self.canvas(ui);
         });
-        self.show_text_editor(ui.ctx());
         self.show_command_palette(ui.ctx());
         self.show_help(ui.ctx());
         self.show_error(ui.ctx());

@@ -102,18 +102,35 @@ pub enum DragState {
     Erase { last: Vec2 },
 }
 
-/// Floating text editor for a shape.
+/// Inline text editor for a shape, placed directly on the canvas.
 #[derive(Clone, Debug)]
-pub struct TextEditor {
+pub struct InlineTextEdit {
     pub id: ShapeId,
     pub text: String,
+    /// Focus has been requested on the text field (done once, on the first
+    /// frame after the editor opens).
+    pub focus_requested: bool,
+    /// The text field held keyboard focus at the end of the previous frame.
+    pub had_focus: bool,
+}
+
+impl InlineTextEdit {
+    /// Open an editor for `id`, seeded with its current text.
+    pub fn new(id: ShapeId, text: String) -> Self {
+        Self {
+            id,
+            text,
+            focus_requested: false,
+            had_focus: false,
+        }
+    }
 }
 
 /// Per-window UI state that is not part of the document.
 #[derive(Default)]
 pub struct UiState {
     pub drag: Option<DragState>,
-    pub text_edit: Option<TextEditor>,
+    pub inline_text_edit: Option<InlineTextEdit>,
     pub hover: Option<ShapeId>,
     pub last_pointer_world: Vec2,
     pub textures: HashMap<ShapeId, TextureHandle>,
