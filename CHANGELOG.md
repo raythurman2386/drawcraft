@@ -10,6 +10,7 @@ All notable changes to DrawCraft are documented here.
 - `edit.select_first` / `edit.select_last` select bottommost / topmost unlocked shapes by z-order.
 - One group-level shift rule for click, marquee, and lasso (groups are atomic toggle units).
 - Marquee now expands to the full group, matching click selection.
+- Project-local verification skill `.cursor/skills/verify-drawcraft/` (CLI/MCP + Xvfb GUI drive recipes, helper scripts, selection feature map) and GUI lasso proof at `docs/proof/lasso-gesture.png`.
 
 ### Fixed
 
