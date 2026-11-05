@@ -1,0 +1,248 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running `target/debug/xtask check`
+    Checking drawcraft-app v0.2.0 (/home/ret/Development/drawcraft/crates/app)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.37s
+   Compiling drawcraft-app v0.2.0 (/home/ret/Development/drawcraft/crates/app)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.80s
+     Running unittests src/lib.rs (target/debug/deps/drawcraft_app-d95460042fd138a2)
+
+running 18 tests
+test inline_edit::tests::enter_commits_single_and_multiline ... ok
+test inline_edit::tests::escape_cancels_even_when_focus_was_dropped ... ok
+test inline_edit::tests::keys_ignored_without_keyboard_ownership ... ok
+test inline_edit::tests::lost_focus_commits ... ok
+test inline_edit::tests::unchanged_text_is_skipped ... ok
+test inline_edit::tests::idle_frame_keeps_editing ... ok
+test theme::tests::canvas_uses_terminal_surface ... ok
+test inline_edit::tests::shift_enter_is_newline_only_for_multiline ... ok
+test theme::tests::day_matches_grok_palette ... ok
+test theme::tests::night_matches_grok_palette ... ok
+test transform::tests::alt_scales_from_centre ... ok
+test transform::tests::plain_corner_is_free_and_anchors_opposite_corner ... ok
+test transform::tests::readout_shows_size_and_degrees ... ok
+test transform::tests::rotate_snaps_to_15_degrees_only_with_shift ... ok
+test transform::tests::scale_is_clamped ... ok
+test transform::tests::shift_alt_corner_is_uniform_about_centre ... ok
+test transform::tests::shift_corner_locks_aspect ... ok
+test transform::tests::shift_edge_scales_both_axes_about_centre_line ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/drawcraft-288ac3a519b080b2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/drawcraft_command-b99f1edacdaf08d1)
+
+running 3 tests
+test registry::tests::every_command_has_a_label_and_description ... ok
+test registry::tests::ids_are_unique ... ok
+test registry::tests::required_params_are_unique_per_command ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/drawcraft_document-03dea9054dff072c)
+
+running 18 tests
+test color::tests::parses_css_forms ... ok
+test color::tests::rejects_garbage ... ok
+test color::tests::parses_hex_forms ... ok
+test document::tests::new_document_is_valid ... ok
+test document::tests::duplicate_page_reassigns_shape_ids ... ok
+test document::tests::duplicate_page_remaps_arrow_bindings ... ok
+test document::tests::pages_can_be_added_and_removed ... ok
+test document::tests::next_shape_id_skips_existing ... ok
+test document::tests::validation_rejects_dangling_binding ... ok
+test document::tests::validation_rejects_duplicate_ids ... ok
+test shape::tests::arrow_style_parses ... ok
+test shape::tests::bounds_include_points ... ok
+test shape::tests::hit_test_respects_rotation ... ok
+test shape::tests::rotation_widens_world_bounds ... ok
+test shape::tests::validates_finite_geometry ... ok
+test style::tests::dash_arrays ... ok
+test style::tests::rejects_invalid_opacity ... ok
+test style::tests::style_round_trip_preserves_unknown_keys ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/drawcraft_editor-e9452b652386631b)
+
+running 27 tests
+test editor::tests::both_bound_arrow_endpoints_are_center_to_center ... ok
+test editor::tests::default_style_is_kind_specific ... ok
+test editor::tests::arrow_snap_skips_linear_shapes ... ok
+test editor::tests::linear_create_gate_accepts_axis_aligned_drags ... ok
+test editor::tests::horizontal_arrow_create_path_commits_and_binds ... ok
+test tests::add_move_and_undo ... ok
+test tests::categories_are_covered_by_registry ... ok
+test tests::align_and_distribute_are_deterministic ... ok
+test tests::arrow_binding_follows_moved_shape ... ok
+test tests::duplicate_and_paste_create_new_ids ... ok
+test tests::edit_select_additive_filters_nonexistent_ids_and_expands_groups ... ok
+test tests::edit_select_lasso_command_rejects_concave_notch ... ok
+test tests::edit_select_lasso_command_works ... ok
+test tests::duplicating_a_bound_arrow_remaps_to_the_copied_targets ... ok
+test tests::lasso_rejects_concave_notch_into_shape ... ok
+test tests::every_editor_command_is_handled_by_dispatch ... ok
+test tests::lasso_selects_only_fully_contained_bounds ... ok
+test tests::page_commands_work ... ok
+test tests::marquee_expands_groups_and_shift_toggles_units ... ok
+test tool::tests::all_tools_round_trip ... ok
+test tool::tests::polyline_is_a_linear_tool ... ok
+test tests::select_command_can_target_shape_ids ... ok
+test tool::tests::shape_tools_map_to_kinds ... ok
+test tests::pasting_an_arrow_without_its_target_clears_the_binding ... ok
+test tool::tests::unknown_tool_is_rejected ... ok
+test tests::select_first_and_last_follow_z_order ... ok
+test tests::shift_click_toggles_ungrouped_and_grouped_shapes ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/drawcraft_format-d4d1718082babb6c)
+
+running 6 tests
+test tests::selection_export_requires_selection ... ok
+test tests::unknown_fields_are_preserved ... ok
+test tests::json_round_trip ... ok
+test tests::saves_and_loads_atomically ... ok
+test tests::rejects_oversized_documents ... ok
+test tests::exports_svg_and_png ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running unittests src/lib.rs (target/debug/deps/drawcraft_geometry-14798733abf1e5aa)
+
+running 10 tests
+test math::tests::distance_to_degenerate_segment ... ok
+test math::tests::smooth_keeps_endpoints ... ok
+test tests::point_in_polygon_handles_concave_shapes ... ok
+test tests::rect_in_polygon_rejects_notch_through_rect ... ok
+test tests::camera_round_trips_world_points ... ok
+test tests::rect_in_polygon_rejects_concave_notch_into_rect ... ok
+test tests::rect_in_polygon_requires_full_containment ... ok
+test tests::rect_union_and_intersection ... ok
+test tests::simplify_keeps_endpoints ... ok
+test tests::zoom_keeps_cursor_world_position_fixed ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/drawcraft_mcp-d0374ab7eae74316)
+
+running 5 tests
+test tests::notifications_get_no_response ... ok
+test tests::parse_errors_are_reported ... ok
+test tests::resource_read_returns_document ... ok
+test tests::command_tool_adds_shape ... ok
+test tests::initialize_and_list_tools ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/drawcraft_render-4ae877aa3724fbef)
+
+running 21 tests
+test mesh::tests::rejects_degenerate_polygon ... ok
+test mesh::tests::triangulates_convex_polygon ... ok
+test mesh::tests::triangulates_concave_polygon ... ok
+test path::tests::ellipse_flattens_to_many_points ... ok
+test path::tests::rect_has_five_verbs ... ok
+test path::tests::dashed_splits_path ... ok
+test path::tests::note_has_folded_corner ... ok
+test scene::tests::builds_scene_for_rectangle ... ok
+test scene::tests::polyline_emits_stroke_through_all_points ... ok
+test scene::tests::selection_filter_limits_items ... ok
+test shapes::tests::arrow_heads_have_geometry ... ok
+test scene::tests::solid_line_emits_a_stroke ... ok
+test shapes::tests::pattern_lines_are_bounded ... ok
+test shapes::tests::every_geometric_kind_has_a_path ... ok
+test text::tests::escapes_xml ... ok
+test svg::tests::transparent_background_omits_rect ... ok
+test svg::tests::svg_contains_geometry_and_dash ... ok
+test text::tests::preserves_newlines ... ok
+test text::tests::wraps_on_words ... ok
+test png::tests::rejects_absurd_scale ... ok
+test png::tests::renders_a_tiny_svg ... ok
+
+test result: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running unittests src/lib.rs (target/debug/deps/drawcraft_session-fef1013ac6f3b2a8)
+
+running 3 tests
+test tests::commands_flow_through_session ... ok
+test tests::recent_is_deduped ... ok
+test tests::save_open_and_export_round_trip ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/xtask-a9ee1837bb8e89fb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests drawcraft_app
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests drawcraft_command
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests drawcraft_document
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests drawcraft_editor
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests drawcraft_format
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests drawcraft_geometry
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests drawcraft_mcp
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests drawcraft_render
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests drawcraft_session
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+layering ok (10 workspace crates)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (target/debug/deps/drawcraft_editor-fe4073b2f3be74d2)
+
+running 1 test
+test tests::every_editor_command_is_handled_by_dispatch ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 26 filtered out; finished in 0.00s
+
+all checks passed
+EXIT 0

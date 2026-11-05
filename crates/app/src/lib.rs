@@ -16,6 +16,7 @@ pub mod panels;
 pub mod state;
 pub mod theme;
 pub mod toolbar;
+pub mod transform;
 
 pub use app::DrawCraftApp;
 pub use state::UiState;
