@@ -560,7 +560,7 @@ impl DrawCraftApp {
                 );
                 ui.add_space(4.0);
                 for (shortcut, action) in [
-                    ("V / H", "Select / hand"),
+                    ("V / Q / H", "Select / lasso / hand"),
                     ("D / K / E", "Draw / highlighter / eraser"),
                     ("L / A", "Line / arrow"),
                     ("T / S / N", "Text / sticky / note"),

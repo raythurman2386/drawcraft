@@ -46,6 +46,74 @@ pub fn point_in_polygon(point: Vec2, polygon: &[Vec2]) -> bool {
     inside
 }
 
+/// True when `rect` is fully contained in `polygon`.
+///
+/// Every corner must be inside the polygon *and* no polygon edge may cross
+/// (or touch) a rect edge. The second check closes the concave gap: a lasso
+/// with a notch that bites into the rect keeps all four corners inside but
+/// its boundary has to cross the rect boundary to get in and out.
+///
+/// Empty rectangles are treated as a single point at `min`. Used by lasso
+/// selection so the lasso is a precision contain tool while marquee stays touch.
+#[must_use]
+pub fn rect_in_polygon(rect: crate::Rect, polygon: &[Vec2]) -> bool {
+    if polygon.len() < 3 {
+        return false;
+    }
+    if rect.is_empty() {
+        return point_in_polygon(rect.min, polygon);
+    }
+    let corners = rect.corners();
+    if !corners
+        .iter()
+        .all(|&corner| point_in_polygon(corner, polygon))
+    {
+        return false;
+    }
+    let mut previous = polygon[polygon.len() - 1];
+    for &current in polygon {
+        for index in 0..corners.len() {
+            let a = corners[index];
+            let b = corners[(index + 1) % corners.len()];
+            if segments_intersect(previous, current, a, b) {
+                return false;
+            }
+        }
+        previous = current;
+    }
+    true
+}
+
+/// Signed area of the triangle `a, b, c` (twice). Positive when counter-clockwise.
+fn orient(a: Vec2, b: Vec2, c: Vec2) -> f64 {
+    (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+}
+
+/// True when `point` is within the bounding box of segment `a..b` (used for collinear cases).
+fn on_segment_bounds(a: Vec2, b: Vec2, point: Vec2) -> bool {
+    point.x >= a.x.min(b.x)
+        && point.x <= a.x.max(b.x)
+        && point.y >= a.y.min(b.y)
+        && point.y <= a.y.max(b.y)
+}
+
+/// Closed segment intersection test (touching and collinear overlap count).
+fn segments_intersect(p1: Vec2, p2: Vec2, q1: Vec2, q2: Vec2) -> bool {
+    let d1 = orient(q1, q2, p1);
+    let d2 = orient(q1, q2, p2);
+    let d3 = orient(p1, p2, q1);
+    let d4 = orient(p1, p2, q2);
+    if ((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0))
+        && ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0))
+    {
+        return true;
+    }
+    (d1 == 0.0 && on_segment_bounds(q1, q2, p1))
+        || (d2 == 0.0 && on_segment_bounds(q1, q2, p2))
+        || (d3 == 0.0 && on_segment_bounds(p1, p2, q1))
+        || (d4 == 0.0 && on_segment_bounds(p1, p2, q2))
+}
+
 /// Ramer-Douglas-Peucker polyline simplification.
 ///
 /// Iterative so that a hostile document with many points cannot overflow the

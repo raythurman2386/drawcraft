@@ -51,16 +51,22 @@ impl Editor {
                 if let Some(id) = params.optional_shape_id("id") {
                     ids.push(id);
                 }
-                let existing: Vec<drawcraft_document::ShapeId> = self
+                let existing = self
                     .doc
                     .shapes()
                     .iter()
                     .map(|shape| shape.id.clone())
+                    .collect::<Vec<_>>();
+                // Filter nonexistent ids on both paths, then expand groups.
+                let filtered: Vec<_> = ids
+                    .into_iter()
+                    .filter(|id| existing.iter().any(|candidate| candidate == id))
                     .collect();
+                let expanded = self.expand_groups(&filtered);
                 if params.boolean_or("additive", false) {
-                    self.selection.extend(ids);
+                    self.selection.extend(expanded);
                 } else {
-                    self.selection.set_existing(ids, &existing);
+                    self.selection.set_existing(expanded, &existing);
                 }
                 Ok(json!({"count": self.selection.len()}))
             }
@@ -71,6 +77,20 @@ impl Editor {
             ids::EDIT_SELECT_NONE => {
                 self.select_none();
                 Ok(json!({"ok": true}))
+            }
+            ids::EDIT_SELECT_LASSO => {
+                let points = parse_points_array(params.get("points"))?;
+                let additive = params.boolean_or("additive", false);
+                let count = self.lasso_select(&points, additive);
+                Ok(json!({"count": count}))
+            }
+            ids::EDIT_SELECT_FIRST => {
+                self.select_first();
+                Ok(json!({"count": self.selection.len()}))
+            }
+            ids::EDIT_SELECT_LAST => {
+                self.select_last();
+                Ok(json!({"count": self.selection.len()}))
             }
 
             // ---- Transforms ---------------------------------------------
@@ -377,6 +397,45 @@ impl Editor {
         self.refresh_arrows();
         Ok(json!({"ok": true}))
     }
+}
+
+fn parse_points_array(value: Option<&Value>) -> Result<Vec<Vec2>> {
+    let Some(value) = value else {
+        return Err(EditError::MissingParam("points"));
+    };
+    let array = value.as_array().ok_or_else(|| EditError::InvalidParam {
+        name: "points",
+        reason: "expected an array of [x, y] pairs".into(),
+    })?;
+    let mut points = Vec::with_capacity(array.len());
+    for entry in array {
+        let pair = entry.as_array().ok_or_else(|| EditError::InvalidParam {
+            name: "points",
+            reason: "each point must be a [x, y] array".into(),
+        })?;
+        if pair.len() < 2 {
+            return Err(EditError::InvalidParam {
+                name: "points",
+                reason: "each point needs at least two numbers".into(),
+            });
+        }
+        let x = pair[0].as_f64().ok_or_else(|| EditError::InvalidParam {
+            name: "points",
+            reason: "point x must be a number".into(),
+        })?;
+        let y = pair[1].as_f64().ok_or_else(|| EditError::InvalidParam {
+            name: "points",
+            reason: "point y must be a number".into(),
+        })?;
+        if !x.is_finite() || !y.is_finite() {
+            return Err(EditError::InvalidParam {
+                name: "points",
+                reason: "point coordinates must be finite".into(),
+            });
+        }
+        points.push(Vec2::new(x, y));
+    }
+    Ok(points)
 }
 
 fn parse_axis(value: &str) -> Result<bool> {

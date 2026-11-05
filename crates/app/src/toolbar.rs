@@ -158,6 +158,7 @@ impl DrawCraftApp {
                         ui.spacing_mut().item_spacing.x = 4.0;
                         section_label(ui, "CREATE", p.muted);
                         self.tool_button(ui, Tool::Select);
+                        self.tool_button(ui, Tool::Lasso);
                         self.tool_button(ui, Tool::Hand);
 
                         section_label(ui, "DRAW", p.muted);

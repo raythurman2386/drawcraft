@@ -75,6 +75,8 @@ pub enum DragState {
         current: Vec2,
         additive: bool,
     },
+    /// Freehand lasso polygon selection.
+    Lasso { points: Vec<Vec2>, additive: bool },
     /// Dragging out a new shape, frame, or text box.
     Create {
         tool: Tool,

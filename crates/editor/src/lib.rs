@@ -287,6 +287,224 @@ mod tests {
     }
 
     #[test]
+    fn shift_click_toggles_ungrouped_and_grouped_shapes() {
+        let mut editor = editor();
+        let a = add_rect(&mut editor, 0.0, 0.0, 40.0, 40.0);
+        let b = add_rect(&mut editor, 80.0, 0.0, 40.0, 40.0);
+        let c = add_rect(&mut editor, 160.0, 0.0, 40.0, 40.0);
+
+        editor.select_at(Vec2::new(20.0, 20.0), false, 1.0);
+        assert_eq!(editor.selection.ids(), std::slice::from_ref(&a));
+        editor.select_at(Vec2::new(20.0, 20.0), true, 1.0);
+        assert!(
+            editor.selection.is_empty(),
+            "shift-click toggles ungrouped off"
+        );
+
+        editor.selection.set_existing(
+            [a.clone(), b.clone()],
+            &editor
+                .doc
+                .shapes()
+                .iter()
+                .map(|s| s.id.clone())
+                .collect::<Vec<_>>(),
+        );
+        editor
+            .dispatch(ids::EDIT_GROUP, &json!({}))
+            .unwrap_or_default();
+        assert_eq!(editor.selection.len(), 2);
+        // Shift-clicking one group member should deselect the whole group.
+        editor.select_at(Vec2::new(20.0, 20.0), true, 1.0);
+        assert!(
+            editor.selection.is_empty(),
+            "shift-click toggles grouped unit off"
+        );
+        // Shift-click again selects the whole group.
+        editor.select_at(Vec2::new(20.0, 20.0), true, 1.0);
+        assert!(editor.selection.contains(&a));
+        assert!(editor.selection.contains(&b));
+        assert!(!editor.selection.contains(&c));
+    }
+
+    #[test]
+    fn marquee_expands_groups_and_shift_toggles_units() {
+        let mut editor = editor();
+        let a = add_rect(&mut editor, 0.0, 0.0, 40.0, 40.0);
+        let b = add_rect(&mut editor, 80.0, 0.0, 40.0, 40.0);
+        let c = add_rect(&mut editor, 200.0, 0.0, 40.0, 40.0);
+        // add_shape selects the newest shape; replace selection before grouping.
+        editor.selection.set_existing(
+            [a.clone(), b.clone()],
+            &editor
+                .doc
+                .shapes()
+                .iter()
+                .map(|s| s.id.clone())
+                .collect::<Vec<_>>(),
+        );
+        editor
+            .dispatch(ids::EDIT_GROUP, &json!({}))
+            .unwrap_or_default();
+        editor.select_none();
+
+        // Touch only shape A — whole group should select.
+        editor.brush_select(Rect::from_xywh(0.0, 0.0, 30.0, 30.0), false);
+        assert!(editor.selection.contains(&a));
+        assert!(editor.selection.contains(&b));
+        assert!(!editor.selection.contains(&c));
+
+        // Additive toggle of the same unit deselects the group.
+        editor.brush_select(Rect::from_xywh(0.0, 0.0, 30.0, 30.0), true);
+        assert!(editor.selection.is_empty());
+    }
+
+    #[test]
+    fn lasso_selects_only_fully_contained_bounds() {
+        let mut editor = editor();
+        let inside = add_rect(&mut editor, 20.0, 20.0, 30.0, 30.0);
+        let overhang = add_rect(&mut editor, 80.0, 80.0, 40.0, 40.0);
+        let points = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(100.0, 0.0),
+            Vec2::new(100.0, 100.0),
+            Vec2::new(0.0, 100.0),
+        ];
+        editor.lasso_select(&points, false);
+        assert!(editor.selection.contains(&inside));
+        assert!(
+            !editor.selection.contains(&overhang),
+            "lasso must require full containment"
+        );
+
+        // Touch marquee still selects overhang.
+        editor.brush_select(Rect::from_xywh(90.0, 90.0, 20.0, 20.0), false);
+        assert!(editor.selection.contains(&overhang));
+    }
+
+    #[test]
+    fn lasso_rejects_concave_notch_into_shape() {
+        let mut editor = editor();
+        // A sits under the notch; B sits clear of it on the right.
+        let a = add_rect(&mut editor, 20.0, 20.0, 60.0, 40.0);
+        let b = add_rect(&mut editor, 120.0, 20.0, 40.0, 40.0);
+        let notch = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(45.0, 0.0),
+            Vec2::new(50.0, 40.0),
+            Vec2::new(55.0, 0.0),
+            Vec2::new(200.0, 0.0),
+            Vec2::new(200.0, 100.0),
+            Vec2::new(0.0, 100.0),
+        ];
+        let count = editor.lasso_select(&notch, false);
+        assert_eq!(count, 1);
+        assert!(
+            !editor.selection.contains(&a),
+            "notch bites into A, so A is not fully contained"
+        );
+        assert!(editor.selection.contains(&b));
+    }
+
+    #[test]
+    fn select_first_and_last_follow_z_order() {
+        let mut editor = editor();
+        let bottom = add_rect(&mut editor, 0.0, 0.0, 20.0, 20.0);
+        let mid = add_rect(&mut editor, 40.0, 0.0, 20.0, 20.0);
+        let top = add_rect(&mut editor, 80.0, 0.0, 20.0, 20.0);
+        // Raise top to front explicitly via zorder.
+        editor.selection.select(top.clone());
+        editor
+            .dispatch(ids::EDIT_ZORDER, &json!({"action": "front"}))
+            .unwrap_or_default();
+        editor.selection.select(bottom.clone());
+        editor
+            .dispatch(ids::EDIT_ZORDER, &json!({"action": "back"}))
+            .unwrap_or_default();
+
+        editor
+            .dispatch(ids::EDIT_SELECT_FIRST, &json!({}))
+            .unwrap_or_default();
+        assert_eq!(editor.selection.ids(), std::slice::from_ref(&bottom));
+        editor
+            .dispatch(ids::EDIT_SELECT_LAST, &json!({}))
+            .unwrap_or_default();
+        assert_eq!(editor.selection.ids(), std::slice::from_ref(&top));
+        let _ = mid;
+    }
+
+    #[test]
+    fn edit_select_additive_filters_nonexistent_ids_and_expands_groups() {
+        let mut editor = editor();
+        let a = add_rect(&mut editor, 0.0, 0.0, 20.0, 20.0);
+        let b = add_rect(&mut editor, 40.0, 0.0, 20.0, 20.0);
+        editor.selection.set_existing(
+            [a.clone(), b.clone()],
+            &editor
+                .doc
+                .shapes()
+                .iter()
+                .map(|s| s.id.clone())
+                .collect::<Vec<_>>(),
+        );
+        editor
+            .dispatch(ids::EDIT_GROUP, &json!({}))
+            .unwrap_or_default();
+        editor.select_none();
+
+        editor
+            .dispatch(
+                ids::EDIT_SELECT,
+                &json!({"ids": [a.as_str(), "shape-does-not-exist"], "additive": true}),
+            )
+            .unwrap_or_default();
+        assert!(editor.selection.contains(&a));
+        assert!(
+            editor.selection.contains(&b),
+            "group expands on edit.select"
+        );
+        assert_eq!(editor.selection.len(), 2);
+        assert!(
+            !editor
+                .selection
+                .ids()
+                .iter()
+                .any(|id| id.as_str() == "shape-does-not-exist")
+        );
+    }
+
+    #[test]
+    fn edit_select_lasso_command_works() {
+        let mut editor = editor();
+        let id = add_rect(&mut editor, 10.0, 10.0, 20.0, 20.0);
+        let value = editor
+            .dispatch(
+                ids::EDIT_SELECT_LASSO,
+                &json!({"points": [[0.0, 0.0], [200.0, 0.0], [200.0, 200.0], [0.0, 200.0]]}),
+            )
+            .unwrap_or_default();
+        assert_eq!(value.get("count").and_then(Value::as_u64), Some(1));
+        assert!(editor.selection.contains(&id));
+    }
+
+    #[test]
+    fn edit_select_lasso_command_rejects_concave_notch() {
+        let mut editor = editor();
+        let a = add_rect(&mut editor, 20.0, 20.0, 60.0, 40.0);
+        let value = editor
+            .dispatch(
+                ids::EDIT_SELECT_LASSO,
+                &json!({"points": [
+                    [0.0, 0.0], [45.0, 0.0], [50.0, 40.0], [55.0, 0.0],
+                    [100.0, 0.0], [100.0, 100.0], [0.0, 100.0]
+                ]}),
+            )
+            .unwrap_or_default();
+        assert_eq!(value.get("count").and_then(Value::as_u64), Some(0));
+        assert!(!editor.selection.contains(&a));
+    }
+
+    #[test]
     fn every_editor_command_is_handled_by_dispatch() {
         let mut editor = editor();
         let registry = Registry::new();

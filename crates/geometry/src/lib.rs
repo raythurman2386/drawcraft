@@ -23,7 +23,8 @@ mod vec2;
 
 pub use camera::Camera;
 pub use math::{
-    clamp, distance_point_segment, point_in_polygon, simplify_polyline, smooth_polyline,
+    clamp, distance_point_segment, point_in_polygon, rect_in_polygon, simplify_polyline,
+    smooth_polyline,
 };
 pub use rect::Rect;
 pub use transform::Transform;
@@ -77,6 +78,73 @@ mod tests {
         ];
         assert!(point_in_polygon(Vec2::new(2.0, 2.0), &polygon));
         assert!(!point_in_polygon(Vec2::new(5.0, 9.0), &polygon));
+    }
+
+    #[test]
+    fn rect_in_polygon_requires_full_containment() {
+        let polygon = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(100.0, 0.0),
+            Vec2::new(100.0, 100.0),
+            Vec2::new(0.0, 100.0),
+        ];
+        let inside = Rect::from_xywh(10.0, 10.0, 20.0, 20.0);
+        let overhang = Rect::from_xywh(90.0, 90.0, 20.0, 20.0);
+        assert!(rect_in_polygon(inside, &polygon));
+        assert!(!rect_in_polygon(overhang, &polygon));
+    }
+
+    #[test]
+    fn rect_in_polygon_rejects_concave_notch_into_rect() {
+        // Big box around the rect, with a notch from the top edge biting down
+        // into the rect's middle. All four rect corners stay inside the
+        // polygon, but the rect is not fully contained.
+        let rect = Rect::from_xywh(20.0, 20.0, 60.0, 40.0);
+        let notch = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(45.0, 0.0),
+            Vec2::new(50.0, 40.0),
+            Vec2::new(55.0, 0.0),
+            Vec2::new(100.0, 0.0),
+            Vec2::new(100.0, 100.0),
+            Vec2::new(0.0, 100.0),
+        ];
+        assert!(
+            rect.corners()
+                .into_iter()
+                .all(|corner| point_in_polygon(corner, &notch)),
+            "precondition: all corners inside the notched lasso"
+        );
+        assert!(!rect_in_polygon(rect, &notch));
+
+        // Same shape of lasso, notch stops short of the rect: contained.
+        let shallow = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(45.0, 0.0),
+            Vec2::new(50.0, 10.0),
+            Vec2::new(55.0, 0.0),
+            Vec2::new(100.0, 0.0),
+            Vec2::new(100.0, 100.0),
+            Vec2::new(0.0, 100.0),
+        ];
+        assert!(rect_in_polygon(rect, &shallow));
+    }
+
+    #[test]
+    fn rect_in_polygon_rejects_notch_through_rect() {
+        // Notch slices fully through the rect top-to-bottom between corners.
+        let rect = Rect::from_xywh(20.0, 20.0, 60.0, 40.0);
+        let slice = [
+            Vec2::new(0.0, 0.0),
+            Vec2::new(45.0, 0.0),
+            Vec2::new(48.0, 80.0),
+            Vec2::new(52.0, 80.0),
+            Vec2::new(55.0, 0.0),
+            Vec2::new(100.0, 0.0),
+            Vec2::new(100.0, 100.0),
+            Vec2::new(0.0, 100.0),
+        ];
+        assert!(!rect_in_polygon(rect, &slice));
     }
 
     #[test]
