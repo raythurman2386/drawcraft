@@ -7,7 +7,7 @@
 - **Alt** while resizing: scale about the selection centre (opposite edge moves symmetrically).
   Shift+Alt = uniform scale about the centre.
 - **Shift** while rotating: angle snaps to 15° increments (relative to drag start).
-- Live numeric readout above the selection while transforming: `W × H  θ°`, mirrored in the
+- Live numeric readout below the selection while transforming: `W × H  θ°`, mirrored in the
   status bar as `Resize …` / `Rotate …`.
 - Modifiers are read every frame (press/release mid-drag works). One undo snapshot per drag.
 
@@ -16,7 +16,7 @@ unit tests. Headless `edit.resize` / `edit.rotate` are unchanged (no new params)
 
 ## How to get to it (user POV)
 Select a shape (`V`, click). Drag a corner handle; hold Shift to keep proportions, Alt to grow from the
-centre. Drag the knob above the selection to rotate; hold Shift for 15° steps. Watch the label above
+centre. Drag the knob above the selection to rotate; hold Shift for 15° steps. Watch the label below
 the selection and the status bar.
 
 ## Driving it
