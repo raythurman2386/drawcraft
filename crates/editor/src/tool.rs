@@ -371,6 +371,13 @@ mod tests {
     }
 
     #[test]
+    fn polyline_is_a_linear_tool() {
+        assert_eq!(Tool::Polyline.shape_kind(), Some(ShapeKind::Polyline));
+        assert!(Tool::Polyline.is_linear_tool());
+        assert!(ShapeKind::Polyline.is_linear());
+    }
+
+    #[test]
     fn unknown_tool_is_rejected() {
         assert!("nope".parse::<Tool>().is_err());
     }

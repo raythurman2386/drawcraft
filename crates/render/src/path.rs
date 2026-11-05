@@ -255,7 +255,7 @@ impl Path {
         let mut path = Self::new();
         path.move_to(rect.min);
         path.line_to(Vec2::new(rect.max.x - fold, rect.min.y));
-        path.line_to(rect.max);
+        path.line_to(Vec2::new(rect.max.x, rect.min.y + fold));
         path.line_to(Vec2::new(rect.max.x, rect.max.y));
         path.line_to(Vec2::new(rect.min.x, rect.max.y));
         path.close();
@@ -463,6 +463,26 @@ mod tests {
         let path = Path::rect(Rect::from_xywh(0.0, 0.0, 10.0, 10.0));
         assert_eq!(path.verbs.len(), 5);
         assert_eq!(path.bounds(), Rect::from_xywh(0.0, 0.0, 10.0, 10.0));
+    }
+
+    #[test]
+    fn note_has_folded_corner() {
+        let rect = Rect::from_xywh(0.0, 0.0, 100.0, 80.0);
+        let fold = 80.0 * 0.18;
+        let path = Path::note(rect);
+        let mut verbs = path.verbs.iter();
+        assert_eq!(verbs.next(), Some(&Verb::MoveTo(Vec2::new(0.0, 0.0))));
+        assert_eq!(
+            verbs.next(),
+            Some(&Verb::LineTo(Vec2::new(100.0 - fold, 0.0)))
+        );
+        // The corner is folded in: the third vertex lies down the right edge,
+        // not at the top-right corner.
+        assert_eq!(verbs.next(), Some(&Verb::LineTo(Vec2::new(100.0, fold))));
+        assert_eq!(verbs.next(), Some(&Verb::LineTo(Vec2::new(100.0, 80.0))));
+        assert_eq!(verbs.next(), Some(&Verb::LineTo(Vec2::new(0.0, 80.0))));
+        assert_eq!(verbs.next(), Some(&Verb::Close));
+        assert!(verbs.next().is_none());
     }
 
     #[test]
