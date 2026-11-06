@@ -31,7 +31,8 @@ def saved(name,count):
 
 def erase(hold):
     drive("key","e")
-    args=["dragpath","250,440","850,440"]
+    # Begin inside the first rectangle we drew, not the old narrow tool rail.
+    args=["dragpath","350,440","370,440","850,440"]
     if hold:args.append("--hold")
     drive(*args)
 
