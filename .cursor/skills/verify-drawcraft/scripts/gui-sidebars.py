@@ -117,6 +117,10 @@ for edge,expected in EXPECTED.items():
     select_all();screenshot(f"align-{edge}-selected");geometry=controls(probe)
     point=geometry[edge];label=point["label"];assert label==f"Align {edge}" and point["enabled"],point
     move(point["x"],point["y"]);time.sleep(1.7);screenshot(f"align-{edge}-tooltip")
+    # Toolbar and fit-to-content can settle while a tooltip is visible.
+    # Read the actual capturable control center again before the click, never
+    # guess a pixel position or route an editing command internally.
+    focus();point=controls(probe)[edge]
     click(point["x"],point["y"]);screenshot(f"align-{edge}-clicked")
     applied,undone=save_revert(file)
     assert expected==applied,(edge,expected,applied);assert undone==ORIGINAL,(edge,undone)

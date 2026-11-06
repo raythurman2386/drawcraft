@@ -378,7 +378,7 @@ impl DrawCraftApp {
             });
         }
         let response = if enabled {
-            response.on_hover_text(tooltip)
+            response
         } else {
             response.on_disabled_hover_text(format!("{tooltip} (select two or more shapes)"))
         };
@@ -398,7 +398,7 @@ impl DrawCraftApp {
             icon,
             if enabled { p.secondary } else { p.muted },
         );
-        response.on_hover_text(tooltip)
+        response
     }
 
     fn color_row(
