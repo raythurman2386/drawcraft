@@ -6,6 +6,7 @@ PR adds or changes a command; command ids come from `drawcraft catalog`.
 
 | Feature | File | Command ids | GUI entry |
 |---|---|---|---|
+| Pen/touch input and edit cancellation | [input-cancellation.md](input-cancellation.md) | `view.set_touch_draw`, `edit.undo`, `edit.redo` | View → Draw with touch; second-finger navigation / Escape |
 | Lasso selection | [selection-lasso.md](selection-lasso.md) | `edit.select_lasso` | Tool rail **Lasso**, key `Q` |
 | Shift = group-level toggle | [selection-shift-groups.md](selection-shift-groups.md) | `edit.select` (`additive`), `edit.select_lasso` (`additive`), `edit.group` | Shift+click / Shift+marquee / Shift+lasso |
 | Select first / last | [selection-first-last.md](selection-first-last.md) | `edit.select_first`, `edit.select_last` | Command palette (Ctrl/Cmd+K) |

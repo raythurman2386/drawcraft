@@ -78,6 +78,15 @@ impl StyleUpdate {
     }
 }
 
+/// Owned pre-gesture state. Keeping both stacks also preserves redo and any
+/// oldest undo entries evicted by mutations at the history limit.
+#[derive(Clone, Debug)]
+pub struct EditCheckpoint {
+    doc: Document,
+    history: History,
+    selection: Selection,
+}
+
 /// The headless editor.
 #[derive(Clone, Debug)]
 pub struct Editor {
@@ -165,14 +174,30 @@ impl Editor {
         Ok(())
     }
 
+    /// Capture before the first mutation, independently of snapshot deduplication.
+    #[must_use]
+    pub fn checkpoint(&self) -> EditCheckpoint {
+        EditCheckpoint {
+            doc: self.doc.clone(),
+            history: self.history.clone(),
+            selection: self.selection.clone(),
+        }
+    }
+
+    /// Abandon all mutations since the checkpoint without changing history.
+    pub fn restore_checkpoint(&mut self, checkpoint: EditCheckpoint) {
+        self.doc = checkpoint.doc;
+        self.history = checkpoint.history;
+        self.selection = checkpoint.selection;
+    }
+
     pub fn snapshot(&mut self) -> bool {
         self.history.record(&self.doc)
     }
 
     /// Undo the most recent [`Self::snapshot`] without leaving an undo step.
     ///
-    /// Used when a pointer gesture is cancelled (for example when a second
-    /// finger turns a stroke into a pinch gesture).
+    /// Only restores one snapshot; multi-mutation gestures must use a checkpoint.
     pub fn rollback_snapshot(&mut self) -> bool {
         let changed = self.history.rollback(&mut self.doc);
         if changed {

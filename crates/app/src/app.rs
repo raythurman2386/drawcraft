@@ -268,7 +268,7 @@ impl DrawCraftApp {
         }
         if ctx.input(|input| input.key_pressed(Key::Escape)) {
             if self.state.drag.is_some() {
-                self.state.drag = None;
+                self.cancel_drag();
             } else {
                 self.run(ids::EDIT_SELECT_NONE, json!({}));
             }

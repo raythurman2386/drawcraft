@@ -176,12 +176,12 @@ impl Touches {
 #[derive(Default)]
 pub struct UiState {
     pub drag: Option<DragState>,
-    /// Whether the gesture that owns [`Self::drag`] recorded an undo snapshot.
-    /// Cancelling the gesture rolls that snapshot back.
-    pub drag_snapshot: bool,
+    /// Pre-mutation document and complete history for the active edit gesture.
+    /// Dropped on commit; consumed on cancellation, even if snapshots deduplicated.
+    pub drag_checkpoint: Option<drawcraft_editor::EditCheckpoint>,
     /// Whether the current drag was started by a finger (as opposed to a pen
     /// or mouse). A pen stroke is never cancelled by a touch landing on the
-    /// screen, which is what makes palm contact safe.
+    /// screen. This does not reject palm contacts at the hardware level.
     pub drag_from_touch: bool,
     /// Fingers currently on the touchscreen.
     pub touches: Touches,

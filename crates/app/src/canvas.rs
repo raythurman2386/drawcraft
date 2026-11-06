@@ -265,8 +265,7 @@ impl DrawCraftApp {
     fn begin_drag(&mut self, ui: &egui::Ui, pointer: Pos2, view: View, world: Vec2) {
         let tool = self.session.editor.tool;
         let camera = view.camera;
-        // Only gestures that take a snapshot can be rolled back on cancel.
-        self.state.drag_snapshot = false;
+        self.state.drag_checkpoint = None;
         // A pointer sitting on a touch contact is a finger, not a pen.
         self.state.drag_from_touch = self.state.touches.contains_near(pointer);
         if tool == Tool::Select {
@@ -282,7 +281,8 @@ impl DrawCraftApp {
                     if original.is_empty() {
                         return;
                     }
-                    self.state.drag_snapshot = self.session.editor.snapshot();
+                    self.state.drag_checkpoint = Some(self.session.editor.checkpoint());
+                    self.session.editor.snapshot();
                     self.state.drag = Some(DragState::Resize {
                         handle,
                         start_bounds: self
@@ -312,7 +312,8 @@ impl DrawCraftApp {
                         .selection_bounds()
                         .map(|bounds| bounds.center())
                         .unwrap_or(world);
-                    self.state.drag_snapshot = self.session.editor.snapshot();
+                    self.state.drag_checkpoint = Some(self.session.editor.checkpoint());
+                    self.session.editor.snapshot();
                     let start_angle = (world.y - pivot.y).atan2(world.x - pivot.x);
                     self.state.drag = Some(DragState::Rotate {
                         pivot,
@@ -338,14 +339,14 @@ impl DrawCraftApp {
                 });
                 return;
             }
+            self.state.drag_checkpoint = Some(self.session.editor.checkpoint());
             if alt {
-                let created = self
+                let _created = self
                     .session
                     .editor
                     .duplicate_selection(Vec2::new(20.0, 20.0));
-                self.state.drag_snapshot = !created.is_empty();
             } else {
-                self.state.drag_snapshot = self.session.editor.snapshot();
+                self.session.editor.snapshot();
             }
             let original = self
                 .session
@@ -371,7 +372,8 @@ impl DrawCraftApp {
         }
 
         if tool == Tool::Eraser {
-            self.state.drag_snapshot = self.session.editor.snapshot();
+            self.state.drag_checkpoint = Some(self.session.editor.checkpoint());
+            self.session.editor.snapshot();
             self.state.drag = Some(DragState::Erase { last: world });
             return;
         }
@@ -581,20 +583,18 @@ impl DrawCraftApp {
                 self.session.mark_dirty();
             }
         }
-        self.state.drag_snapshot = false;
+        self.state.drag_checkpoint = None;
         self.state.drag_from_touch = false;
         let _ = world;
     }
 
-    /// Abandon the in-progress gesture, rolling back its snapshot if it took one.
-    ///
-    /// Finger navigation calls this when it takes over, so a palm landing mid
-    /// stroke cannot leave a half-drawn shape or a stray undo step.
-    fn cancel_drag(&mut self) {
-        if self.state.drag.take().is_some() && self.state.drag_snapshot {
-            self.session.editor.rollback_snapshot();
+    /// Abandon the whole gesture, not just its most recent snapshot.
+    /// Both second-finger navigation and Escape share this cancellation boundary.
+    pub(crate) fn cancel_drag(&mut self) {
+        self.state.drag = None;
+        if let Some(checkpoint) = self.state.drag_checkpoint.take() {
+            self.session.editor.restore_checkpoint(checkpoint);
         }
-        self.state.drag_snapshot = false;
         self.state.drag_from_touch = false;
     }
 
@@ -1711,3 +1711,7 @@ mod touch_tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "input_cancel_tests.rs"]
+mod input_cancel_tests;
