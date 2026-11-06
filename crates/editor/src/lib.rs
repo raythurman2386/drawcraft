@@ -136,6 +136,57 @@ mod tests {
     }
 
     #[test]
+    fn every_alignment_edge_routes_through_commands_and_undoes_one_step() {
+        for edge in ["left", "center", "right", "top", "middle", "bottom"] {
+            let mut editor = editor();
+            let first = add_rect(&mut editor, 0.0, 0.0, 30.0, 10.0);
+            let second = add_rect(&mut editor, 50.0, 20.0, 20.0, 30.0);
+            editor
+                .dispatch(ids::EDIT_SELECT, &json!({"ids":[first, second]}))
+                .unwrap();
+            let expected = editor.selection_bounds().unwrap();
+            let before = editor.doc.clone();
+            editor
+                .dispatch(ids::EDIT_ALIGN, &json!({"edge":edge}))
+                .unwrap();
+            for shape in editor.doc.shapes() {
+                let bounds = shape.world_bounds();
+                let value = match edge {
+                    "left" => bounds.min.x - expected.min.x,
+                    "center" => bounds.center().x - expected.center().x,
+                    "right" => bounds.max.x - expected.max.x,
+                    "top" => bounds.min.y - expected.min.y,
+                    "middle" => bounds.center().y - expected.center().y,
+                    _ => bounds.max.y - expected.max.y,
+                };
+                assert!(value.abs() < 1.0e-9, "{edge}: {bounds:?} {value}");
+            }
+            assert_eq!(editor.selection.len(), 2);
+            assert!(editor.undo(), "{edge}");
+            assert_eq!(editor.doc, before, "{edge}");
+        }
+    }
+
+    #[test]
+    fn insufficient_selection_does_not_mutate_or_fill_undo_history() {
+        let mut editor = editor();
+        let only = add_rect(&mut editor, 10.0, 20.0, 30.0, 40.0);
+        editor.history.clear();
+        editor.selection.select(only);
+        let before = editor.doc.clone();
+        for command in [ids::EDIT_ALIGN, ids::EDIT_DISTRIBUTE] {
+            editor
+                .dispatch(command, &json!({"edge":"left", "axis":"horizontal"}))
+                .unwrap();
+        }
+        assert_eq!(editor.doc, before);
+        assert!(
+            !editor.can_undo(),
+            "creation and no-op commands must not leave an undo step"
+        );
+    }
+
+    #[test]
     fn select_command_can_target_shape_ids() {
         let mut editor = editor();
         let first = add_rect(&mut editor, 0.0, 0.0, 10.0, 10.0);

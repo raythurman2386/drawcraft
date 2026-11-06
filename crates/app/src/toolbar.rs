@@ -6,6 +6,7 @@ use egui::{
     Sense, Stroke, TextStyle, WidgetInfo, WidgetType, pos2, vec2,
 };
 use serde_json::json;
+use std::path::Path;
 
 use crate::app::DrawCraftApp;
 use crate::icons;
@@ -131,9 +132,9 @@ impl DrawCraftApp {
         egui::Panel::left("drawcraft-tools")
             .resizable(false)
             .show_separator_line(false)
-            .default_size(188.0)
-            .min_size(188.0)
-            .max_size(188.0)
+            .default_size(252.0)
+            .min_size(252.0)
+            .max_size(252.0)
             .frame(
                 Frame::new()
                     .fill(p.surface)
@@ -182,9 +183,9 @@ impl DrawCraftApp {
                                 }
                                 shape_tools.push(tool);
                             }
+                            let width = compact_tool_width(ui.available_width());
                             for chunk in shape_tools.chunks(2) {
                                 ui.horizontal(|ui| {
-                                    let width = 77.0;
                                     self.compact_tool_button(ui, chunk[0], width);
                                     if let Some(tool) = chunk.get(1) {
                                         self.compact_tool_button(ui, *tool, width);
@@ -201,8 +202,8 @@ impl DrawCraftApp {
                             &[Tool::Note, Tool::Image][..],
                             &[Tool::Frame][..],
                         ] {
+                            let width = compact_tool_width(ui.available_width());
                             ui.horizontal(|ui| {
-                                let width = 77.0;
                                 self.compact_tool_button(ui, chunk[0], width);
                                 if let Some(tool) = chunk.get(1) {
                                     self.compact_tool_button(ui, *tool, width);
@@ -254,6 +255,23 @@ impl DrawCraftApp {
             FontId::monospace(9.5),
             p.muted,
         );
+        if let Ok(path) = std::env::var("DRAWCRAFT_GUI_PROOF") {
+            let scale = ui.ctx().pixels_per_point();
+            let rect = [
+                rect.left() * scale,
+                rect.top() * scale,
+                rect.right() * scale,
+                rect.bottom() * scale,
+            ];
+            let record = serde_json::json!({"label":tool.label(),"rect":rect,"scale":scale});
+            let _ = std::fs::write(
+                Path::new(&path).join(format!("tool-{}.json", tool.as_str())),
+                record.to_string(),
+            );
+        }
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tool.label())
+        });
         let clicked = response.clicked();
         let _ = response.on_hover_text(format!("{} ({})", tool.label(), tool.shortcut()));
         if clicked {
@@ -265,30 +283,53 @@ impl DrawCraftApp {
     fn compact_tool_button(&mut self, ui: &mut egui::Ui, tool: Tool, width: f32) {
         let p = theme::palette(self.session.editor.view.dark);
         let selected = self.session.editor.tool == tool;
-        let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 25.0), Sense::click());
-        let hovered = response.hovered();
-        let painter = ui.painter();
+        let (rect, response) = ui.allocate_exact_size(egui::vec2(width, 27.0), Sense::click());
+        let color = if selected { p.accent } else { p.secondary };
         if selected {
-            painter.rect_filled(rect, CornerRadius::same(6), theme::with_alpha(p.accent, 30));
-        } else if hovered {
-            painter.rect_filled(rect, CornerRadius::same(6), p.highlight);
+            ui.painter()
+                .rect_filled(rect, CornerRadius::same(6), theme::with_alpha(p.accent, 30));
+        } else if response.hovered() {
+            ui.painter()
+                .rect_filled(rect, CornerRadius::same(6), p.highlight);
         }
         icons::paint_tool_icon(
-            painter,
+            ui.painter(),
             Rect::from_min_size(
-                pos2(rect.left() + 7.0, rect.center().y - 8.0),
+                pos2(rect.left() + 8.0, rect.center().y - 8.0),
                 vec2(16.0, 16.0),
             ),
             tool,
-            if selected { p.accent } else { p.secondary },
+            color,
         );
-        painter.text(
-            pos2(rect.left() + 28.0, rect.center().y),
+        // Clip a long label only at the rail boundary; this width fits every full name.
+        let text_rect = Rect::from_min_max(
+            pos2(rect.left() + 28.0, rect.top()),
+            pos2(rect.right() - 3.0, rect.bottom()),
+        );
+        ui.painter().with_clip_rect(text_rect).text(
+            pos2(text_rect.left(), rect.center().y),
             Align2::LEFT_CENTER,
             tool.label(),
             FontId::proportional(10.5),
-            if selected { p.accent } else { p.secondary },
+            color,
         );
+        if let Ok(path) = std::env::var("DRAWCRAFT_GUI_PROOF") {
+            let scale = ui.ctx().pixels_per_point();
+            let rect = [
+                rect.left() * scale,
+                rect.top() * scale,
+                rect.right() * scale,
+                rect.bottom() * scale,
+            ];
+            let record = serde_json::json!({"label":tool.label(),"rect":rect,"scale":scale});
+            let _ = std::fs::write(
+                Path::new(&path).join(format!("tool-{}.json", tool.as_str())),
+                record.to_string(),
+            );
+        }
+        response.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::WidgetType::Button, true, tool.label())
+        });
         let clicked = response.clicked();
         let _ = response.on_hover_text(format!("{} ({})", tool.label(), tool.shortcut()));
         if clicked {
@@ -606,4 +647,22 @@ fn logo(ui: &mut egui::Ui, p: theme::Palette) {
         FontId::proportional(12.0),
         p.on_accent,
     );
+}
+
+const fn compact_tool_width(available_width: f32) -> f32 {
+    const COLUMN_GAP: f32 = 4.0;
+    (available_width - COLUMN_GAP) / 2.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compact_tool_width;
+
+    #[test]
+    fn expanded_rail_gives_each_tool_a_complete_label_area() {
+        let width = compact_tool_width(252.0 - 20.0);
+        assert_eq!(width, 114.0);
+        assert!(width > 1.0);
+        assert_eq!(width - 31.0, 83.0);
+    }
 }

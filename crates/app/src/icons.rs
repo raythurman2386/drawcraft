@@ -184,3 +184,63 @@ pub fn paint_tool_icon(painter: &Painter, rect: Rect, tool: Tool, color: Color32
         }
     }
 }
+
+/// The alignment commands exposed by the inspector.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AlignIcon {
+    Left,
+    Center,
+    Right,
+    Top,
+    Middle,
+    Bottom,
+}
+
+/// Paint a font-independent alignment icon: a reference edge plus aligned bars.
+pub fn paint_align_icon(painter: &Painter, rect: Rect, icon: AlignIcon, color: Color32) {
+    let stroke = Stroke::new(1.5, color);
+    let point = |x: f32, y: f32| pos2(rect.left() + x, rect.top() + y);
+    let bar = |x: f32, y: f32, width: f32, height: f32| {
+        painter.rect_filled(
+            Rect::from_min_size(point(x, y), egui::vec2(width, height)),
+            CornerRadius::ZERO,
+            color,
+        );
+    };
+    match icon {
+        AlignIcon::Left | AlignIcon::Center | AlignIcon::Right => {
+            let x = match icon {
+                AlignIcon::Left => 2.0,
+                AlignIcon::Center => 8.0,
+                AlignIcon::Right => 14.0,
+                _ => unreachable!(),
+            };
+            painter.line_segment([point(x, 1.0), point(x, 15.0)], stroke);
+            let (left_1, left_2, width) = match icon {
+                AlignIcon::Left => (4.0, 4.0, 10.0),
+                AlignIcon::Center => (3.0, 5.0, 10.0),
+                AlignIcon::Right => (6.0, 9.0, 10.0),
+                _ => unreachable!(),
+            };
+            bar(left_1, 4.0, width, 3.0);
+            bar(left_2, 10.0, width - 4.0, 3.0);
+        }
+        AlignIcon::Top | AlignIcon::Middle | AlignIcon::Bottom => {
+            let y = match icon {
+                AlignIcon::Top => 2.0,
+                AlignIcon::Middle => 8.0,
+                AlignIcon::Bottom => 14.0,
+                _ => unreachable!(),
+            };
+            painter.line_segment([point(1.0, y), point(15.0, y)], stroke);
+            let (top_1, top_2, height) = match icon {
+                AlignIcon::Top => (4.0, 4.0, 10.0),
+                AlignIcon::Middle => (3.0, 6.0, 10.0),
+                AlignIcon::Bottom => (2.0, 5.0, 10.0),
+                _ => unreachable!(),
+            };
+            bar(4.0, top_1, 3.0, height);
+            bar(10.0, top_2, 3.0, height - 4.0);
+        }
+    }
+}
