@@ -2,10 +2,11 @@ use drawcraft_command::{Registry, ids};
 use drawcraft_document::{ArrowHead, ArrowStyle, Dash, Fill, Rect as DocRect, ShapeKind, Vec2};
 use drawcraft_editor::{StyleUpdate, Tool};
 use egui::{
-    Align, Align2, Button, Color32, ComboBox, CornerRadius, Frame, Key, Layout, Margin, Response,
-    RichText, Sense, Slider, Stroke, TextEdit,
+    Align, Align2, Button, Color32, ComboBox, CornerRadius, Frame, Key, Layout, Margin,
+    Rect as UiRect, Response, RichText, Sense, Slider, Stroke, StrokeKind, TextEdit,
 };
 use serde_json::json;
+use std::path::Path;
 
 use crate::app::DrawCraftApp;
 use crate::icons;
@@ -293,38 +294,43 @@ impl DrawCraftApp {
                 }
             });
             ui.add_space(4.0);
-            ui.horizontal_wrapped(|ui| {
-                if glyph_button(ui, p, "⇤", "Align left").clicked() {
-                    self.run(ids::EDIT_ALIGN, json!({"edge": "left"}));
-                }
-                if glyph_button(ui, p, "↔", "Align centre").clicked() {
-                    self.run(ids::EDIT_ALIGN, json!({"edge": "center"}));
-                }
-                if glyph_button(ui, p, "⇥", "Align right").clicked() {
-                    self.run(ids::EDIT_ALIGN, json!({"edge": "right"}));
-                }
-                if glyph_button(ui, p, "⤒", "Align top").clicked() {
-                    self.run(ids::EDIT_ALIGN, json!({"edge": "top"}));
-                }
-                if glyph_button(ui, p, "↕", "Align middle").clicked() {
-                    self.run(ids::EDIT_ALIGN, json!({"edge": "middle"}));
-                }
-                if glyph_button(ui, p, "⤓", "Align bottom").clicked() {
-                    self.run(ids::EDIT_ALIGN, json!({"edge": "bottom"}));
+            let can_align = self.session.editor.selection.len() >= 2;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 5.0;
+                for (edge, icon, label) in [
+                    ("left", icons::AlignIcon::Left, "Align left"),
+                    ("center", icons::AlignIcon::Center, "Align center"),
+                    ("right", icons::AlignIcon::Right, "Align right"),
+                    ("top", icons::AlignIcon::Top, "Align top"),
+                    ("middle", icons::AlignIcon::Middle, "Align middle"),
+                    ("bottom", icons::AlignIcon::Bottom, "Align bottom"),
+                ] {
+                    if self
+                        .align_button(ui, p, edge, icon, label, can_align)
+                        .clicked()
+                    {
+                        self.run(ids::EDIT_ALIGN, json!({"edge": edge}));
+                    }
                 }
             });
             ui.add_space(4.0);
+            let can_distribute = self.session.editor.selection.len() >= 3;
+            let can_flip = !self.session.editor.selection.is_empty();
             ui.horizontal_wrapped(|ui| {
-                if action_button(ui, p, "Distribute H").clicked() {
+                if enabled_action_button(ui, p, "Distribute H", "distribute-h", can_distribute)
+                    .clicked()
+                {
                     self.run(ids::EDIT_DISTRIBUTE, json!({"axis": "horizontal"}));
                 }
-                if action_button(ui, p, "Distribute V").clicked() {
+                if enabled_action_button(ui, p, "Distribute V", "distribute-v", can_distribute)
+                    .clicked()
+                {
                     self.run(ids::EDIT_DISTRIBUTE, json!({"axis": "vertical"}));
                 }
-                if action_button(ui, p, "Flip H").clicked() {
+                if enabled_action_button(ui, p, "Flip H", "flip-h", can_flip).clicked() {
                     self.run(ids::EDIT_FLIP, json!({"axis": "horizontal"}));
                 }
-                if action_button(ui, p, "Flip V").clicked() {
+                if enabled_action_button(ui, p, "Flip V", "flip-v", can_flip).clicked() {
                     self.run(ids::EDIT_FLIP, json!({"axis": "vertical"}));
                 }
             });
@@ -346,6 +352,68 @@ impl DrawCraftApp {
                 }
             });
         });
+    }
+
+    fn align_button(
+        &self,
+        ui: &mut egui::Ui,
+        p: Palette,
+        edge: &str,
+        icon: icons::AlignIcon,
+        tooltip: &str,
+        enabled: bool,
+    ) -> Response {
+        let desired_size = egui::vec2(39.0, 28.0);
+        let (rect, _) = ui.allocate_exact_size(desired_size, Sense::hover());
+        let response = ui
+            .add_enabled_ui(enabled, |ui| {
+                ui.interact(rect, ui.id().with(("align", edge)), Sense::click())
+            })
+            .inner;
+        if let Ok(path) = std::env::var("DRAWCRAFT_GUI_PROOF") {
+            let scale = ui.ctx().pixels_per_point();
+            let actual_rect = response.rect;
+            let record = serde_json::json!({"edge":edge,"x":actual_rect.center().x*scale,"y":actual_rect.center().y*scale,
+                "rect":[actual_rect.min.x*scale,actual_rect.min.y*scale,actual_rect.max.x*scale,actual_rect.max.y*scale],
+                "label":tooltip,"enabled":response.enabled()});
+            let _ = std::fs::create_dir_all(&path).and_then(|()| {
+                std::fs::write(
+                    Path::new(&path).join(format!("align-{edge}.json")),
+                    record.to_string(),
+                )
+            });
+        }
+        let response = if enabled {
+            response.on_hover_ui(|ui| {
+                ui.set_max_width(ui.spacing().tooltip_width);
+                let label = ui.label(tooltip);
+                trace_alignment_tooltip(ui, tooltip, &label);
+            })
+        } else {
+            let explanation = format!("{tooltip} (select two or more shapes)");
+            response.on_disabled_hover_ui(|ui| {
+                ui.set_max_width(ui.spacing().tooltip_width);
+                let label = ui.label(&explanation);
+                trace_alignment_tooltip(ui, &explanation, &label);
+            })
+        };
+        response
+            .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, tooltip));
+        let widget = ui.style().interact(&response);
+        ui.painter().rect(
+            rect,
+            CornerRadius::same(4),
+            if enabled { widget.bg_fill } else { p.highlight },
+            Stroke::new(1.0, p.highlight),
+            StrokeKind::Inside,
+        );
+        icons::paint_align_icon(
+            ui.painter(),
+            UiRect::from_center_size(rect.center(), egui::vec2(16.0, 16.0)),
+            icon,
+            if enabled { p.secondary } else { p.muted },
+        );
+        response
     }
 
     fn color_row(
@@ -751,6 +819,50 @@ fn segmented<T: Copy + PartialEq>(
         }
     });
     changed
+}
+
+/// Read-only native proof: record the actual tooltip Label and its visible bounds.
+fn trace_alignment_tooltip(ui: &egui::Ui, text: &str, response: &egui::Response) {
+    let Ok(path) = std::env::var("DRAWCRAFT_GUI_PROOF") else {
+        return;
+    };
+    let scale = ui.ctx().pixels_per_point();
+    let rect = response.rect;
+    let clip = ui.clip_rect();
+    let record = serde_json::json!({"texts": [{"text": text,
+        "rect": [rect.min.x * scale, rect.min.y * scale,
+            rect.max.x * scale, rect.max.y * scale],
+        "clip": [clip.min.x * scale, clip.min.y * scale,
+            clip.max.x * scale, clip.max.y * scale]}]});
+    let _ = std::fs::write(
+        Path::new(&path).join("tooltip-paint.json"),
+        record.to_string(),
+    );
+}
+
+fn enabled_action_button(
+    ui: &mut egui::Ui,
+    p: Palette,
+    label: &str,
+    id: &str,
+    enabled: bool,
+) -> Response {
+    let response = ui.add_enabled(enabled, text_action_button(p, label));
+    if let Ok(path) = std::env::var("DRAWCRAFT_GUI_PROOF") {
+        let scale = ui.ctx().pixels_per_point();
+        let record = serde_json::json!({"x":response.rect.center().x*scale,"y":response.rect.center().y*scale,"label":label,"enabled":response.enabled()});
+        let _ = std::fs::write(
+            Path::new(&path).join(format!("{id}.json")),
+            record.to_string(),
+        );
+    }
+    response.on_hover_text(label)
+}
+
+fn text_action_button(p: Palette, label: &str) -> Button<'static> {
+    Button::new(RichText::new(label).size(10.5).color(p.secondary))
+        .frame(false)
+        .min_size(egui::vec2(0.0, 24.0))
 }
 
 pub(crate) fn action_button(ui: &mut egui::Ui, p: Palette, label: &str) -> Response {

@@ -49,6 +49,22 @@ impl DrawCraftApp {
         let response = ui.allocate_response(available, Sense::click_and_drag());
         let rect = response.rect;
         let viewport = Vec2::new(f64::from(rect.width()), f64::from(rect.height()));
+        if let Ok(path) = std::env::var("DRAWCRAFT_GUI_PROOF") {
+            let first = self.session.editor.doc.shapes().first().map(|shape| {
+                let center = view_camera_screen(
+                    self.session.editor.camera,
+                    viewport,
+                    rect,
+                    shape.world_bounds().center(),
+                );
+                serde_json::json!({"x":center.x,"y":center.y,"label":shape.id.as_str()})
+            });
+            let record = serde_json::json!({"shape":first,"viewport":[rect.width(),rect.height()]});
+            let _ = std::fs::write(
+                std::path::Path::new(&path).join("canvas.json"),
+                record.to_string(),
+            );
+        }
         self.session.editor.set_viewport(viewport);
 
         let pointer = ui.input(|input| input.pointer.hover_pos());
@@ -1434,4 +1450,17 @@ fn paint_grid(painter: &egui::Painter, _rect: EguiRect, view: View, colors: them
         }
         x += spacing;
     }
+}
+
+fn view_camera_screen(
+    camera: drawcraft_geometry::Camera,
+    viewport: Vec2,
+    origin: EguiRect,
+    world: Vec2,
+) -> Pos2 {
+    let point = camera.world_to_screen(world, viewport);
+    Pos2::new(
+        origin.left() + point.x as f32,
+        origin.top() + point.y as f32,
+    )
 }
