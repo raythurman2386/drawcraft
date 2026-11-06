@@ -8,7 +8,7 @@ or gradients are embedded. The foreground uses `#FBF6EA` and background uses
 
 The PNGs were rendered from the SVG at 16, 32, 48, 64, 128, 256, 512, and 1024
 pixels with librsvg and ImageMagick (Lanczos reduction). `drawcraft.ico` contains
-six PNG-compressed frames (16–256) and `drawcraft.icns` contains ten valid ICNS
+six uncompressed BMP/DIB frames (16–256) and `drawcraft.icns` contains ten valid ICNS
 PNG entries, including Retina representations.
 
 `egui::ViewportBuilder` consumes the embedded 256 px PNG for the native window;
