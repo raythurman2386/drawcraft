@@ -11,6 +11,7 @@ DrawCraft is clean-room: no copied code, assets, or algorithms from tldraw, godr
 ## What works today (v0.3.0)
 
 - **Infinite canvas** with pan, zoom, pinch, zoom-to-fit, grid, minimap, dark mode, and focus mode.
+- **Pen and touch:** a stylus draws with the active tool where the OS delivers it as a pointer — on Linux that means X11/XWayland. Under **native Wayland (confirmed on Hyprland) the pen only moves the cursor**: winit 0.30 does not implement tablet-v2, and Hyprland sends no pointer button for the tip, so pen clicks are not delivered. Run with `WAYLAND_DISPLAY` unset to use XWayland until tablet support lands. A finger pans, and two fingers pan + pinch-zoom without leaving strokes behind (touch works on native Wayland). Touch never cancels an in-progress pen stroke. **View → Draw with touch** lets a finger draw too. Pressure, pen hover, and full palm rejection are not wired yet.
 - **Tools:** select, lasso, hand, freehand draw, highlighter, eraser, laser, line, arrow, text, sticky note, image, frame, and 20 geometric shapes.
 - **Editing:** click/shift/brush/lasso selection (groups are atomic; lasso is fully-contained), select first/last by z-order, move, resize, rotate, flip, duplicate, Alt-drag copy, grid/shape snapping (hold Ctrl/Cmd while dragging), group/ungroup, lock, z-order, align, distribute, copy/paste, undo/redo, multiple pages.
 - **Styling:** solid/dashed/dotted/hand-drawn strokes; none/semi/solid/pattern/full fills; stroke width, opacity, font size; labels and text; shape/arrow styling panel.
@@ -19,7 +20,7 @@ DrawCraft is clean-room: no copied code, assets, or algorithms from tldraw, godr
 - **Export:** SVG and PNG, whole page or selection.
 - **Agent surface:** CLI, MCP stdio server, JSON document resource, command catalog, base64 previews.
 
-Known gaps and the path to v1 are tracked in [ROADMAP.md](ROADMAP.md). The biggest remaining v1 items are line vertex editing, deeper frame membership UX, and `.tldr` interoperability.
+Known gaps and the path to v1 are tracked in [ROADMAP.md](ROADMAP.md). The biggest remaining v1 items are line vertex editing, deeper frame membership UX, native-Wayland pen input (waiting on winit tablet support), and `.tldr` interoperability.
 
 ## Design and theme
 

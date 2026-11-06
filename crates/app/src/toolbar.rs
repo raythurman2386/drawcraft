@@ -538,6 +538,18 @@ fn menu_view(app: &mut DrawCraftApp, ui: &mut egui::Ui) {
             let minimap = app.session.editor.view.minimap;
             app.run(ids::VIEW_SET_MINIMAP, json!({"minimap": minimap}));
         }
+        ui.separator();
+        if ui
+            .checkbox(&mut app.session.editor.view.touch_draw, "Draw with touch")
+            .on_hover_text(
+                "Off: a finger pans and pinches. On: a finger draws with the active tool. \
+                 A pen always draws; two-finger gestures always pan and zoom.",
+            )
+            .clicked()
+        {
+            let touch_draw = app.session.editor.view.touch_draw;
+            app.run(ids::VIEW_SET_TOUCH_DRAW, json!({"touch_draw": touch_draw}));
+        }
     });
 }
 

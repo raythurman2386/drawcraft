@@ -4,6 +4,11 @@ All notable changes to DrawCraft are documented here.
 
 ## Unreleased
 
+### Added
+
+- Pen and touchscreen input: where the OS presents the stylus as a pointer (X11/XWayland on Linux), it draws with the active tool; a finger pans the canvas and two fingers pan + pinch-zoom, without committing stray strokes. Touch never cancels an in-progress pen stroke. `view.set_touch_draw` (View → Draw with touch) enables finger drawing for devices without a pen. Native-Wayland pen clicks, pressure, pen hover, and full palm rejection still need tablet-protocol support above `winit` (0.30 has none); on Hyprland the pen moves the cursor but cannot click, so use XWayland (`WAYLAND_DISPLAY` unset) for now.
+- `Editor::rollback_snapshot` / `History::rollback` so a cancelled gesture restores the document without leaving an undo or redo step.
+
 ## [0.3.0] — 2026-11-05
 
 Selection improvements (#3), placement and inline text editing (#4/#5), shapes rail (#6), transform modifiers (#7), and document lifecycle, autosave, recovery, external-change handling, and fuzz coverage (#8).

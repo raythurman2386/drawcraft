@@ -51,10 +51,39 @@ impl DrawCraftApp {
         let viewport = Vec2::new(f64::from(rect.width()), f64::from(rect.height()));
         self.session.editor.set_viewport(viewport);
 
-        let pointer = ui.input(|input| input.pointer.hover_pos());
+        // `hover_pos` is empty on the frame a touch is released (egui sends
+        // `PointerGone` right after the release), so clicks must use
+        // `interact_pos`, which keeps the touch location for that frame.
+        let hover = ui.input(|input| input.pointer.hover_pos());
+        let pointer = ui.input(|input| input.pointer.interact_pos());
         let pointer_relative = pointer.map(|position| to_vec2(position - rect.min));
-        self.handle_viewport_input(ui, &response, pointer_relative, viewport);
-        self.handle_pointer_input(ui, &response, rect, viewport, pointer);
+        let touch_events: Vec<(egui::TouchId, egui::TouchPhase, egui::Pos2)> = ui.input(|input| {
+            input
+                .events
+                .iter()
+                .filter_map(|event| match event {
+                    egui::Event::Touch { id, phase, pos, .. } => Some((*id, *phase, *pos)),
+                    _ => None,
+                })
+                .collect()
+        });
+        for (id, phase, pos) in touch_events {
+            self.state.touches.update(id, phase, pos);
+        }
+        let any_touch = self.state.touches.any();
+        let multi_touch = ui.input(|input| input.multi_touch());
+        let touch_navigating = self.state.update_touch_mode(
+            any_touch,
+            multi_touch.is_some(),
+            self.session.editor.view.touch_draw,
+        );
+        // A pen stroke in progress wins over touch: a palm landing on the
+        // screen must not cancel or freeze it.
+        let pen_stroke = self.state.drag.is_some() && !self.state.drag_from_touch;
+        let touch_navigating = touch_navigating && !pen_stroke;
+        self.handle_touch_input(ui, rect, viewport, multi_touch, touch_navigating);
+        self.handle_viewport_input(ui, &response, pointer_relative, viewport, touch_navigating);
+        self.handle_pointer_input(ui, &response, rect, viewport, pointer, touch_navigating);
 
         let view = View {
             camera: self.session.editor.camera,
@@ -74,13 +103,47 @@ impl DrawCraftApp {
         } else if self.state.drag.is_none() {
             paint_tool_hint(&painter, view, self.session.editor.tool, palette);
         }
-        self.paint_overlays(&painter, view, pointer);
+        self.paint_overlays(&painter, view, hover);
 
-        if let Some(pointer) = pointer {
-            self.state.last_pointer_world = view.to_world(to_vec2(pointer - rect.min));
+        if let Some(hover) = hover {
+            self.state.last_pointer_world = view.to_world(to_vec2(hover - rect.min));
         }
-        self.update_cursor(ui, &response, rect, view, pointer);
+        self.update_cursor(ui, &response, rect, view, hover);
         self.paint_inline_text_edit(ui, view, &palette);
+    }
+
+    /// Pan and pinch-zoom for finger gestures.
+    ///
+    /// Any tool gesture in progress is cancelled first, so resting a palm or
+    /// starting a pinch never commits a partial stroke. A pen is delivered as a
+    /// normal pointer and never reaches this path.
+    fn handle_touch_input(
+        &mut self,
+        ui: &egui::Ui,
+        rect: EguiRect,
+        viewport: Vec2,
+        multi_touch: Option<egui::MultiTouchInfo>,
+        touch_navigating: bool,
+    ) {
+        if !touch_navigating {
+            return;
+        }
+        self.cancel_drag();
+        let camera = &mut self.session.editor.camera;
+        if let Some(multi_touch) = multi_touch {
+            let translation = multi_touch.translation_delta;
+            camera.pan(Vec2::new(
+                f64::from(translation.x),
+                f64::from(translation.y),
+            ));
+            if (multi_touch.zoom_delta - 1.0).abs() > 0.001 {
+                let center = to_vec2(multi_touch.center_pos - rect.min);
+                camera.zoom_at(center, viewport, f64::from(multi_touch.zoom_delta));
+            }
+        } else {
+            let delta = ui.input(|input| input.pointer.delta());
+            camera.pan(Vec2::new(f64::from(delta.x), f64::from(delta.y)));
+        }
     }
 
     fn handle_viewport_input(
@@ -89,7 +152,13 @@ impl DrawCraftApp {
         response: &egui::Response,
         pointer: Option<Vec2>,
         viewport: Vec2,
+        touch_navigating: bool,
     ) {
+        // Finger gestures are handled by `handle_touch_input`; do not apply
+        // scroll/pinch twice or pan again through the hand tool.
+        if touch_navigating {
+            return;
+        }
         let camera = &mut self.session.editor.camera;
         let scroll = ui.input(|input| input.smooth_scroll_delta);
         let zoom_delta = ui.input(|input| input.zoom_delta());
@@ -124,6 +193,7 @@ impl DrawCraftApp {
         rect: EguiRect,
         viewport: Vec2,
         pointer: Option<Pos2>,
+        touch_navigating: bool,
     ) {
         let Some(pointer) = pointer else {
             return;
@@ -136,6 +206,18 @@ impl DrawCraftApp {
         };
         let local = to_vec2(pointer - rect.min);
         let world = view.to_world(local);
+        if touch_navigating {
+            // Dragging a finger pans the canvas (see `handle_touch_input`).
+            // A tap still selects or places, so a finger can pick shapes and
+            // open text without a pen.
+            if response.clicked() {
+                self.handle_click(ui, world, view);
+            }
+            if response.double_clicked() {
+                self.edit_text_at(world);
+            }
+            return;
+        }
         let space = ui.input(|input| input.key_down(Key::Space));
         let middle = ui.input(|input| input.pointer.middle_down());
         if space || middle {
@@ -163,12 +245,18 @@ impl DrawCraftApp {
             self.handle_click(ui, world, view);
         }
         if response.double_clicked() {
-            if let Some(id) = self.session.editor.topmost_at(world, 3.0 / camera.zoom) {
-                if let Some(shape) = self.session.editor.doc.shape(&id) {
-                    if shape.kind.has_text() {
-                        self.state.inline_text_edit =
-                            Some(InlineTextEdit::new(id, shape.display_text().to_owned()));
-                    }
+            self.edit_text_at(world);
+        }
+    }
+
+    /// Open the inline text editor for a text-bearing shape under `world`.
+    fn edit_text_at(&mut self, world: Vec2) {
+        let tolerance = 3.0 / self.session.editor.camera.zoom;
+        if let Some(id) = self.session.editor.topmost_at(world, tolerance) {
+            if let Some(shape) = self.session.editor.doc.shape(&id) {
+                if shape.kind.has_text() {
+                    self.state.inline_text_edit =
+                        Some(InlineTextEdit::new(id, shape.display_text().to_owned()));
                 }
             }
         }
@@ -177,6 +265,10 @@ impl DrawCraftApp {
     fn begin_drag(&mut self, ui: &egui::Ui, pointer: Pos2, view: View, world: Vec2) {
         let tool = self.session.editor.tool;
         let camera = view.camera;
+        // Only gestures that take a snapshot can be rolled back on cancel.
+        self.state.drag_snapshot = false;
+        // A pointer sitting on a touch contact is a finger, not a pen.
+        self.state.drag_from_touch = self.state.touches.contains_near(pointer);
         if tool == Tool::Select {
             if let Some(bounds) = self.selection_screen_rect(view) {
                 if let Some(handle) = hit_handle(pointer, bounds) {
@@ -190,7 +282,7 @@ impl DrawCraftApp {
                     if original.is_empty() {
                         return;
                     }
-                    self.session.editor.snapshot();
+                    self.state.drag_snapshot = self.session.editor.snapshot();
                     self.state.drag = Some(DragState::Resize {
                         handle,
                         start_bounds: self
@@ -220,7 +312,7 @@ impl DrawCraftApp {
                         .selection_bounds()
                         .map(|bounds| bounds.center())
                         .unwrap_or(world);
-                    self.session.editor.snapshot();
+                    self.state.drag_snapshot = self.session.editor.snapshot();
                     let start_angle = (world.y - pivot.y).atan2(world.x - pivot.x);
                     self.state.drag = Some(DragState::Rotate {
                         pivot,
@@ -247,11 +339,13 @@ impl DrawCraftApp {
                 return;
             }
             if alt {
-                self.session
+                let created = self
+                    .session
                     .editor
                     .duplicate_selection(Vec2::new(20.0, 20.0));
+                self.state.drag_snapshot = !created.is_empty();
             } else {
-                self.session.editor.snapshot();
+                self.state.drag_snapshot = self.session.editor.snapshot();
             }
             let original = self
                 .session
@@ -277,7 +371,7 @@ impl DrawCraftApp {
         }
 
         if tool == Tool::Eraser {
-            self.session.editor.snapshot();
+            self.state.drag_snapshot = self.session.editor.snapshot();
             self.state.drag = Some(DragState::Erase { last: world });
             return;
         }
@@ -487,7 +581,21 @@ impl DrawCraftApp {
                 self.session.mark_dirty();
             }
         }
+        self.state.drag_snapshot = false;
+        self.state.drag_from_touch = false;
         let _ = world;
+    }
+
+    /// Abandon the in-progress gesture, rolling back its snapshot if it took one.
+    ///
+    /// Finger navigation calls this when it takes over, so a palm landing mid
+    /// stroke cannot leave a half-drawn shape or a stray undo step.
+    fn cancel_drag(&mut self) {
+        if self.state.drag.take().is_some() && self.state.drag_snapshot {
+            self.session.editor.rollback_snapshot();
+        }
+        self.state.drag_snapshot = false;
+        self.state.drag_from_touch = false;
     }
 
     /// Render an inline text editor directly on the canvas over the shape being
@@ -1433,5 +1541,173 @@ fn paint_grid(painter: &egui::Painter, _rect: EguiRect, view: View, colors: them
             y += spacing;
         }
         x += spacing;
+    }
+}
+
+#[cfg(test)]
+mod touch_tests {
+    use drawcraft_editor::Tool;
+    use egui::{
+        Event, Modifiers, PointerButton, Pos2, RawInput, Rect, TouchDeviceId, TouchId, TouchPhase,
+        pos2, vec2,
+    };
+
+    use crate::app::DrawCraftApp;
+
+    struct Harness {
+        app: DrawCraftApp,
+        ctx: egui::Context,
+        time: f64,
+    }
+
+    impl Harness {
+        fn new(tool: Tool, touch_draw: bool) -> Self {
+            let mut app = DrawCraftApp::new(None);
+            app.session.editor.tool = tool;
+            app.session.editor.view.touch_draw = touch_draw;
+            Self {
+                app,
+                ctx: egui::Context::default(),
+                time: 0.0,
+            }
+        }
+
+        /// Run one frame with the given raw events, laid out like the real app.
+        fn frame(&mut self, events: Vec<Event>) {
+            let Self { app, ctx, time } = self;
+            *time += 0.05;
+            let input = RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))),
+                time: Some(*time),
+                events,
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |ui| {
+                app.canvas(ui);
+            });
+            // Headless runs do not upload textures; discard the deltas.
+            output.textures_delta.clear();
+        }
+    }
+
+    fn touch(id: u64, phase: TouchPhase, pos: Pos2) -> Event {
+        Event::Touch {
+            device_id: TouchDeviceId(0),
+            id: TouchId(id),
+            phase,
+            pos,
+            force: None,
+        }
+    }
+
+    fn press(pos: Pos2) -> Event {
+        Event::PointerButton {
+            pos,
+            button: PointerButton::Primary,
+            pressed: true,
+            modifiers: Modifiers::default(),
+        }
+    }
+
+    fn release(pos: Pos2) -> Event {
+        Event::PointerButton {
+            pos,
+            button: PointerButton::Primary,
+            pressed: false,
+            modifiers: Modifiers::default(),
+        }
+    }
+
+    #[test]
+    fn finger_drag_pans_instead_of_drawing() {
+        let mut harness = Harness::new(Tool::Draw, false);
+        harness.frame(vec![]);
+        let start = pos2(400.0, 300.0);
+        harness.frame(vec![
+            touch(1, TouchPhase::Start, start),
+            Event::PointerMoved(start),
+            press(start),
+        ]);
+        for step in 1..=4 {
+            let pos = pos2(400.0 + 20.0 * step as f32, 300.0 + 10.0 * step as f32);
+            harness.frame(vec![
+                touch(1, TouchPhase::Move, pos),
+                Event::PointerMoved(pos),
+            ]);
+        }
+        let end = pos2(480.0, 340.0);
+        harness.frame(vec![
+            touch(1, TouchPhase::End, end),
+            release(end),
+            Event::PointerGone,
+        ]);
+
+        assert!(
+            harness.app.session.editor.doc.shapes().is_empty(),
+            "a finger must not draw while touch navigation is on"
+        );
+        assert_ne!(
+            harness.app.session.editor.camera.center,
+            drawcraft_document::Vec2::ZERO,
+            "the canvas should have panned"
+        );
+    }
+
+    #[test]
+    fn pen_drag_draws() {
+        let mut harness = Harness::new(Tool::Draw, false);
+        harness.frame(vec![]);
+        let start = pos2(200.0, 200.0);
+        harness.frame(vec![Event::PointerMoved(start), press(start)]);
+        for step in 1..=4 {
+            let pos = pos2(200.0 + 20.0 * step as f32, 200.0 + 5.0 * step as f32);
+            harness.frame(vec![Event::PointerMoved(pos)]);
+        }
+        let end = pos2(280.0, 220.0);
+        harness.frame(vec![Event::PointerMoved(end), release(end)]);
+
+        let shapes = harness.app.session.editor.doc.shapes();
+        assert_eq!(shapes.len(), 1, "a pen drag should commit one stroke");
+        assert_eq!(shapes[0].kind, drawcraft_document::ShapeKind::Draw);
+    }
+
+    #[test]
+    fn second_finger_cancels_a_touch_stroke() {
+        let mut harness = Harness::new(Tool::Draw, true);
+        harness.frame(vec![]);
+        let start = pos2(300.0, 300.0);
+        harness.frame(vec![
+            touch(1, TouchPhase::Start, start),
+            Event::PointerMoved(start),
+            press(start),
+        ]);
+        let moved = pos2(340.0, 320.0);
+        harness.frame(vec![
+            touch(1, TouchPhase::Move, moved),
+            Event::PointerMoved(moved),
+        ]);
+        assert!(
+            harness.app.state.drag.is_some(),
+            "one finger draws when touch drawing is on"
+        );
+
+        // A second finger starts a pinch: the stroke must be abandoned.
+        let second = pos2(600.0, 400.0);
+        harness.frame(vec![
+            touch(2, TouchPhase::Start, second),
+            touch(1, TouchPhase::Move, moved),
+            Event::PointerMoved(moved),
+        ]);
+        assert!(harness.app.state.drag.is_none());
+        harness.frame(vec![
+            touch(1, TouchPhase::End, moved),
+            touch(2, TouchPhase::End, second),
+            release(moved),
+            Event::PointerGone,
+        ]);
+        assert!(
+            harness.app.session.editor.doc.shapes().is_empty(),
+            "a cancelled touch stroke must not be committed"
+        );
     }
 }

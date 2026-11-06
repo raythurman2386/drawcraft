@@ -17,6 +17,10 @@ pub struct ViewState {
     pub focus: bool,
     pub minimap: bool,
     pub grid_size: f64,
+    /// When set, a single finger draws with the active tool instead of panning
+    /// the canvas. A pen always draws; touch always pans and pinch-zooms
+    /// otherwise. Two-finger gestures navigate regardless of this flag.
+    pub touch_draw: bool,
 }
 
 impl Default for ViewState {
@@ -27,6 +31,7 @@ impl Default for ViewState {
             focus: false,
             minimap: false,
             grid_size: 20.0,
+            touch_draw: false,
         }
     }
 }
@@ -160,8 +165,20 @@ impl Editor {
         Ok(())
     }
 
-    pub fn snapshot(&mut self) {
-        self.history.record(&self.doc);
+    pub fn snapshot(&mut self) -> bool {
+        self.history.record(&self.doc)
+    }
+
+    /// Undo the most recent [`Self::snapshot`] without leaving an undo step.
+    ///
+    /// Used when a pointer gesture is cancelled (for example when a second
+    /// finger turns a stroke into a pinch gesture).
+    pub fn rollback_snapshot(&mut self) -> bool {
+        let changed = self.history.rollback(&mut self.doc);
+        if changed {
+            self.prune_selection();
+        }
+        changed
     }
 
     pub fn next_shape_id(&self) -> ShapeId {
