@@ -366,10 +366,14 @@ impl DrawCraftApp {
         let desired_size = egui::vec2(39.0, 28.0);
         let rect = egui::Rect::from_min_size(ui.next_widget_position(), desired_size);
         ui.advance_cursor_after_rect(rect);
-        let response = ui.interact(rect, ui.id().with(("align", edge)), Sense::click());
+        let response = ui
+            .add_enabled_ui(enabled, |ui| {
+                ui.interact(rect, ui.id().with(("align", edge)), Sense::click())
+            })
+            .inner;
         if let Ok(path) = std::env::var("DRAWCRAFT_GUI_PROOF") {
             let scale = ui.ctx().pixels_per_point();
-            let record = serde_json::json!({"edge":edge,"x":rect.center().x*scale,"y":rect.center().y*scale,"label":tooltip,"enabled":enabled});
+            let record = serde_json::json!({"edge":edge,"x":rect.center().x*scale,"y":rect.center().y*scale,"label":tooltip,"enabled":response.enabled()});
             let _ = std::fs::create_dir_all(&path).and_then(|()| {
                 std::fs::write(
                     Path::new(&path).join(format!("align-{edge}.json")),
@@ -378,9 +382,18 @@ impl DrawCraftApp {
             });
         }
         let response = if enabled {
-            response
+            response.on_hover_ui(|ui| {
+                ui.set_max_width(ui.spacing().tooltip_width);
+                let label = ui.label(tooltip);
+                trace_alignment_tooltip(ui, tooltip, &label);
+            })
         } else {
-            response.on_disabled_hover_text(format!("{tooltip} (select two or more shapes)"))
+            let explanation = format!("{tooltip} (select two or more shapes)");
+            response.on_disabled_hover_ui(|ui| {
+                ui.set_max_width(ui.spacing().tooltip_width);
+                let label = ui.label(&explanation);
+                trace_alignment_tooltip(ui, &explanation, &label);
+            })
         };
         response
             .widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, enabled, tooltip));
@@ -806,6 +819,25 @@ fn segmented<T: Copy + PartialEq>(
     changed
 }
 
+/// Read-only native proof: record the actual tooltip Label and its visible bounds.
+fn trace_alignment_tooltip(ui: &egui::Ui, text: &str, response: &egui::Response) {
+    let Ok(path) = std::env::var("DRAWCRAFT_GUI_PROOF") else {
+        return;
+    };
+    let scale = ui.ctx().pixels_per_point();
+    let rect = response.rect;
+    let clip = ui.clip_rect();
+    let record = serde_json::json!({"texts": [{"text": text,
+        "rect": [rect.min.x * scale, rect.min.y * scale,
+            rect.max.x * scale, rect.max.y * scale],
+        "clip": [clip.min.x * scale, clip.min.y * scale,
+            clip.max.x * scale, clip.max.y * scale]}]});
+    let _ = std::fs::write(
+        Path::new(&path).join("tooltip-paint.json"),
+        record.to_string(),
+    );
+}
+
 fn enabled_action_button(
     ui: &mut egui::Ui,
     p: Palette,
@@ -816,7 +848,7 @@ fn enabled_action_button(
     let response = ui.add_enabled(enabled, text_action_button(p, label));
     if let Ok(path) = std::env::var("DRAWCRAFT_GUI_PROOF") {
         let scale = ui.ctx().pixels_per_point();
-        let record = serde_json::json!({"x":response.rect.center().x*scale,"y":response.rect.center().y*scale,"label":label,"enabled":enabled});
+        let record = serde_json::json!({"x":response.rect.center().x*scale,"y":response.rect.center().y*scale,"label":label,"enabled":response.enabled()});
         let _ = std::fs::write(
             Path::new(&path).join(format!("{id}.json")),
             record.to_string(),

@@ -16,7 +16,11 @@ X.XOpenDisplay.restype=ctypes.c_void_p;X.XDefaultRootWindow.restype=ctypes.c_ulo
 D=ctypes.c_void_p(X.XOpenDisplay(None));assert D
 
 def flush(): X.XFlush(D);X.XSync(D,0)
+OFFSET=(0,0);SCALE=1.25
+def native(point):
+    return (OFFSET[0]+int(point[0]+.5),OFFSET[1]+int(point[1]+.5))
 def move(x,y):
+    x,y=native((x,y))
     T.XTestFakeMotionEvent(D,-1,int(x),int(y),0);flush();time.sleep(.2)
 def click(x,y):
     move(x,y);T.XTestFakeButtonEvent(D,1,1,0);flush();time.sleep(.3)
@@ -45,6 +49,34 @@ def window_handle():
     X.XFree(children)
     assert len(result)==1,result
     return max(result)[1]
+
+def calibrate_native_window():
+    global OFFSET
+    root=X.XDefaultRootWindow(D);win=window_handle();child=ctypes.c_ulong();x=ctypes.c_int();y=ctypes.c_int()
+    X.XTranslateCoordinates(D,win,root,0,0,ctypes.byref(x),ctypes.byref(y),ctypes.byref(child))
+    OFFSET=(x.value,y.value);return OFFSET
+def tooltip_records(probe):
+    for _ in range(45):
+        if (probe/"tooltip-paint.json").exists():
+            try:return json.loads((probe/"tooltip-paint.json").read_text())["texts"]
+            except (json.JSONDecodeError,KeyError):pass
+        time.sleep(.1)
+    raise AssertionError(f"No rendered native tooltip Label ({probe})")
+
+def assert_tooltip(probe,name,expected,point,enabled):
+    move(point["x"],point["y"]);time.sleep(1.0)
+    records=tooltip_records(probe);assert len(records)==1,f"Exactly one tooltip expected: {records}"
+    actual=records[0];text=actual["text"]
+    assert text==expected,(text,expected)
+    assert point["enabled"] is enabled and point["label"]==f'Align {point["edge"]}',point
+    left,top,right,bottom=actual["rect"];cleft,ctop,cright,cbottom=actual["clip"]
+    left,top=native((max(left,cleft)+1,max(top,ctop)+1));right,bottom=native((min(right,cright)-1,min(bottom,cbottom)-1))
+    image=P/f"{name}-tooltip.png";screenshot(f"{name}-tooltip")
+    from PIL import Image
+    pixels=Image.open(image).convert("RGB").crop((left,top,right,bottom))
+    assert pixels.width>0 and pixels.height>0 and len(set(pixels.getdata()))>1,(name,actual)
+    return {"control":point["edge"],"enabled":enabled,"actual_enabled":point["enabled"],"response":point,"expected_label":expected,"visible_label":actual,"sampled_physical_rect":[left,top,right,bottom]}
+
 def all_controls(probe):
     result={}
     for path in probe.glob("*.json"):
@@ -69,7 +101,7 @@ def launch(name):
         # With no WM an initial resize/focus alone may precede winit's first
         # redraw. A real pointer move inside the native canvas requests it.
         X.XRaiseWindow(D,window_handle());X.XSetInputFocus(D,window_handle(),1,0)
-        move(850,400);time.sleep(.15)
+        move(680,320);time.sleep(.15)
     if not (probe/"canvas.json").exists():
         screenshot(f"{name}-no-first-frame")
     assert (probe/"canvas.json").exists(),f"No first {name} canvas frame"
@@ -77,6 +109,8 @@ def launch(name):
         if (probe/"tool-parallelogram.json").exists():break
         X.XRaiseWindow(D,window_handle());flush();time.sleep(.3)
     screenshot(f"{name}-initial")
+    origin=calibrate_native_window()
+    print("NATIVE WINDOW ORIGIN",origin,"PIXELS PER POINT",SCALE,flush=True)
     return file,q,probe
 
 def controls(probe):
@@ -106,7 +140,7 @@ def distribution_positions(axis):
 ORIGINAL=[(20,30),(180,110),(340,20)]
 EXPECTED={"left":[(20,30),(20,110),(20,20)],"center":[(160,30),(170,110),(180,20)],"right":[(300,30),(320,110),(340,20)],
     "top":[(20,20),(180,20),(340,20)],"middle":[(20,85),(180,65),(340,105)],"bottom":[(20,150),(180,110),(340,190)]}
-results=[]
+results=[];tooltips=[]
 if os.environ.get("DRAWCRAFT_ALIGNMENT_ONLY") == "1":
     raise SystemExit(0)
 for edge,expected in EXPECTED.items():
@@ -116,7 +150,7 @@ for edge,expected in EXPECTED.items():
     # X11 focus and keyboard input only; the on-screen button controls are not synthesized internally.
     select_all();screenshot(f"align-{edge}-selected");geometry=controls(probe)
     point=geometry[edge];label=point["label"];assert label==f"Align {edge}" and point["enabled"],point
-    move(point["x"],point["y"]);time.sleep(1.7);screenshot(f"align-{edge}-tooltip")
+    tooltips.append(assert_tooltip(probe,f"align-{edge}",f"Align {edge}",point,True))
     # Toolbar and fit-to-content can settle while a tooltip is visible.
     # Read the actual capturable control center again before the click, never
     # guess a pixel position or route an editing command internally.
@@ -145,11 +179,12 @@ else:
                 left,top,right,bottom=record["rect"];assert right-left>=113, (control_name,record)
     trace=json.loads((probe/"canvas.json").read_text());shape=trace["shape"]
     # canvas trace is in logical egui pixels; XTest uses physical framebuffer pixels.
-    click(int(shape["x"]*1.25+.5),int(shape["y"]*1.25+.5));time.sleep(1)
+    click(shape["x"]*1.25,shape["y"]*1.25);time.sleep(1)
     screenshot("single-selected")
     checks=all_controls(probe)
     for edge in EXPECTED:
         assert checks[f"align-{edge}"]["enabled"] is False, (edge,checks[f"align-{edge}"])
+        tooltips.append(assert_tooltip(probe,f"single-{edge}",f'Align {edge} (select two or more shapes)',checks[f"align-{edge}"],False))
     for name in ("distribute-h","distribute-v"):
         assert checks[name]["enabled"] is False
     before=positions(file);before_document=json.loads(file.read_text());click(checks["align-left"]["x"],checks["align-left"]["y"]);focus();chord("s")
@@ -174,6 +209,9 @@ else:
         click(x,y);screenshot(f"tool-{name}-selected")
     summary={"single_selection":shape,"all_alignment_disabled":True,"distribution_disabled":True,"single_align_ignored":True,"flip_single_and_undo":True,"distribution_h_v_and_undo":True,"resizes":[[960,620],[1280,800],[1440,900]],"control_snapshot":checks}
     (q/"result.json").write_text(json.dumps(summary,indent=2));stop()
+    tooltips.sort(key=lambda row:(row["actual_enabled"],list(EXPECTED).index(row["control"])))
+    assert [row["control"] for row in tooltips]==list(EXPECTED)*2 and [row["actual_enabled"] for row in tooltips]==[False]*6+[True]*6,tooltips
+    (P/"tooltip-proof.json").write_text(json.dumps(tooltips,indent=2));print(json.dumps(tooltips,indent=2))
 
 (P/"run-stopped.txt").unlink(missing_ok=True)
 (P/"run-passed.txt").write_text("all sidebar GUI assertions passed\n")
