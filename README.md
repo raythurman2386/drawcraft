@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo/drawcraft-icon.svg" alt="DrawCraft logo" width="160">
+</p>
+
 # DrawCraft
 
 **An open-source, local-first infinite-canvas whiteboard and diagramming app.** Pure Rust, GPU-rendered with `wgpu` through `eframe`/`egui`, and drivable by humans, scripts, and agents through the same command system.
@@ -93,7 +97,7 @@ git tag -a v0.3.0 -m "v0.3.0"
 git push origin v0.3.0
 ```
 
-`.github/workflows/release.yml` builds the desktop binary for Linux (x86_64), macOS (aarch64), and Windows (x86_64), packages each with the licenses, README, and changelog (`.tar.gz` on Unix, `.zip` on Windows), and publishes a GitHub release with `checksums.txt` and generated notes. Tags with a hyphen (`v0.3.0-rc.1`) are marked as prereleases.
+`.github/workflows/release.yml` builds the desktop binary for Linux (x86_64), macOS (aarch64), and Windows (x86_64), packages each with the licenses, README, and changelog (`.tar.gz` on Unix, `.zip` on Windows), and publishes a GitHub release with `checksums.txt` and generated notes. Each archive includes the approved app branding: Linux desktop and hicolor PNG icon metadata, a portable `.app` with `DrawCraft.icns` on macOS, and `DrawCraft.ico` plus an embedded executable icon on Windows. Source masters and the 16–1024 px PNG ladder live in [`assets/logo`](assets/logo). Tags with a hyphen (`v0.3.0-rc.1`) are marked as prereleases.
 
 ## Architecture
 

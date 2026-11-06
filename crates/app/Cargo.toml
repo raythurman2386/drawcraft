@@ -29,6 +29,10 @@ serde_json.workspace = true
 name = "drawcraft"
 path = "src/main.rs"
 
+# Embeds .ico only when targeting Windows; a no-op on Unix hosts.
+[build-dependencies]
+winresource = "0.1"
+
 [dev-dependencies]
 drawcraft-document = { path = "../document" }
 drawcraft-format = { path = "../format" }

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=DrawCraft
+Comment=Local-first infinite-canvas whiteboard
+Exec=drawcraft %F
+Icon=drawcraft
+Terminal=false
+Categories=Graphics;Office;
+Keywords=whiteboard;diagram;drawing;
