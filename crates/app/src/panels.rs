@@ -364,8 +364,7 @@ impl DrawCraftApp {
         enabled: bool,
     ) -> Response {
         let desired_size = egui::vec2(39.0, 28.0);
-        let rect = egui::Rect::from_min_size(ui.next_widget_position(), desired_size);
-        ui.advance_cursor_after_rect(rect);
+        let (rect, _) = ui.allocate_exact_size(desired_size, Sense::hover());
         let response = ui
             .add_enabled_ui(enabled, |ui| {
                 ui.interact(rect, ui.id().with(("align", edge)), Sense::click())
@@ -373,7 +372,10 @@ impl DrawCraftApp {
             .inner;
         if let Ok(path) = std::env::var("DRAWCRAFT_GUI_PROOF") {
             let scale = ui.ctx().pixels_per_point();
-            let record = serde_json::json!({"edge":edge,"x":rect.center().x*scale,"y":rect.center().y*scale,"label":tooltip,"enabled":response.enabled()});
+            let actual_rect = response.rect;
+            let record = serde_json::json!({"edge":edge,"x":actual_rect.center().x*scale,"y":actual_rect.center().y*scale,
+                "rect":[actual_rect.min.x*scale,actual_rect.min.y*scale,actual_rect.max.x*scale,actual_rect.max.y*scale],
+                "label":tooltip,"enabled":response.enabled()});
             let _ = std::fs::create_dir_all(&path).and_then(|()| {
                 std::fs::write(
                     Path::new(&path).join(format!("align-{edge}.json")),

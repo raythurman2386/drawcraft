@@ -55,6 +55,21 @@ def calibrate_native_window():
     root=X.XDefaultRootWindow(D);win=window_handle();child=ctypes.c_ulong();x=ctypes.c_int();y=ctypes.c_int()
     X.XTranslateCoordinates(D,win,root,0,0,ctypes.byref(x),ctypes.byref(y),ctypes.byref(child))
     OFFSET=(x.value,y.value);return OFFSET
+def native_window_size():
+    root=ctypes.c_ulong();x=ctypes.c_int();y=ctypes.c_int();w=ctypes.c_uint();h=ctypes.c_uint();border=ctypes.c_uint();depth=ctypes.c_uint()
+    X.XGetGeometry(D,window_handle(),ctypes.byref(root),ctypes.byref(x),ctypes.byref(y),ctypes.byref(w),ctypes.byref(h),ctypes.byref(border),ctypes.byref(depth))
+    return [w.value,h.value]
+
+def reveal_alignment_row(probe,width,height):
+    # Small inspectors scroll: real wheel input exposes the allocated row before capture.
+    for _ in range(12):
+        rows=controls(probe)
+        if all(0<=r["rect"][0]<r["rect"][2]<=width and 30<=r["rect"][1]<r["rect"][3]<=height-30 for r in rows.values()):
+            move(350,100);return rows
+        move(min(rows["left"]["x"],width-50),height-100)
+        T.XTestFakeButtonEvent(D,5,1,0);T.XTestFakeButtonEvent(D,5,0,0);flush();time.sleep(.4)
+    raise AssertionError(("alignment row is not fully visible",width,height,rows))
+
 def tooltip_records(probe):
     for _ in range(45):
         if (probe/"tooltip-paint.json").exists():
@@ -119,9 +134,17 @@ def controls(probe):
         for control_name in EXPECTED:
             path=probe/f"align-{control_name}.json"
             if path.exists(): result[control_name]=json.loads(path.read_text())
-        if len(result)==6: return result
+        if len(result)==6:
+            assert_level_row(result)
+            return result
         time.sleep(.15)
     raise AssertionError("No visible complete alignment widget trace")
+def assert_level_row(records):
+    centres=[(records[edge]["rect"][1]+records[edge]["rect"][3])/2 for edge in EXPECTED]
+    assert max(centres)-min(centres)<=1.0,("alignment response centre spread exceeds 1 physical pixel",records)
+    assert all(abs(records[edge]["y"]-centre)<0.01 for edge,centre in zip(EXPECTED,centres)),records
+    return {"centres_y":centres,"spread_px":max(centres)-min(centres),"responses":records}
+
 def select_all():focus();chord("a");time.sleep(.8)
 def save_revert(file):
     focus();chord("s");time.sleep(.8);applied=positions(file)
@@ -170,16 +193,23 @@ file,q,probe=launch("selection-and-layout")
 if os.environ.get("DRAWCRAFT_LEGACY_BASELINE"):
     stop()
 else:
+    select_all()
+    layout_proof=[]
     for width,height in [(960,620),(1280,800),(1440,900)]:
-        X.XResizeWindow(D,window_handle(),width,height);time.sleep(2)
+        X.XResizeWindow(D,window_handle(),width,height);flush();time.sleep(2)
+        assert native_window_size()==[width,height],native_window_size()
+        reveal_alignment_row(probe,width,height)
         screenshot(f"rail-{width}x{height}")
+        layout_proof.append({"window":[width,height],**assert_level_row(controls(probe)),"frame":f"rail-{width}x{height}.png"})
         checks=all_controls(probe)
         for control_name,record in checks.items():
             if record.get("scale") is not None:
                 left,top,right,bottom=record["rect"];assert right-left>=113, (control_name,record)
+    (P/"alignment-row-proof.json").write_text(json.dumps(layout_proof,indent=2))
     trace=json.loads((probe/"canvas.json").read_text());shape=trace["shape"]
     # canvas trace is in logical egui pixels; XTest uses physical framebuffer pixels.
-    click(shape["x"]*1.25,shape["y"]*1.25);time.sleep(1)
+    scale=all_controls(probe)["tool-parallelogram"]["scale"]
+    click(shape["x"]*scale,shape["y"]*scale);time.sleep(1)
     screenshot("single-selected")
     checks=all_controls(probe)
     for edge in EXPECTED:

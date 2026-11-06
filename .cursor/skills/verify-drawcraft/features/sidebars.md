@@ -23,6 +23,8 @@ Window sizes tested are 960x620, 1280x800, and 1440x900. The same fixture exerci
 
 Every enabled three-shape hover and disabled one-shape hover asserts both the real `Response.enabled()` and the exact text of the visible Label created inside egui's Tooltip UI. Its visible bounds must contain real framebuffer pixels in the corresponding `import -window root` capture; this is not an intended-boolean or PNG-presence-only assertion. Disabled clicks remain document no-ops.
 
+All six actual allocated Response rectangles must have vertical centres within 1 physical pixel on every alignment control read. `alignment-row-proof.json` additionally records the actual rectangles and centre spreads at 960x620, 1280x800, and 1440x900; inspect the matching real framebuffer PNGs for a level row.
+
 Prerequisites: `Xvfb`, ImageMagick `import`, `libX11`, `libXtst`, Python 3 with Pillow.
 Extend this script with a new ordinary-click case when the sidebar gains a command.
 
