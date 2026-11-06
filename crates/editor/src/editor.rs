@@ -780,6 +780,9 @@ impl Editor {
     }
 
     pub fn align_selection(&mut self, edge: &str) -> Result<()> {
+        if self.selection.len() < 2 {
+            return Ok(());
+        }
         let Some(bounds) = self.selection_bounds() else {
             return Ok(());
         };
