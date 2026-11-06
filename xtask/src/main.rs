@@ -307,6 +307,8 @@ fn bundle() -> Result<()> {
     let binary = root.join("target").join("release").join(binary_name());
     if binary.exists() {
         println!("bundled binary: {}", binary.display());
+        #[cfg(target_os = "macos")]
+        bundle_macos_icons(&root)?;
         Ok(())
     } else {
         Err(format!("expected binary at {}", binary.display()).into())
@@ -319,4 +321,45 @@ fn binary_name() -> &'static str {
     } else {
         "drawcraft"
     }
+}
+
+#[cfg(target_os = "macos")]
+fn bundle_macos_icons(root: &std::path::Path) -> Result<()> {
+    use std::fs;
+
+    let bundle = root.join("target").join("release").join("DrawCraft.app");
+    let resources = bundle.join("Contents").join("Resources");
+    fs::create_dir_all(bundle.join("Contents").join("MacOS"))?;
+    fs::create_dir_all(&resources)?;
+    fs::copy(
+        root.join("assets").join("logo").join("drawcraft.icns"),
+        resources.join("DrawCraft.icns"),
+    )?;
+    fs::copy(
+        root.join("target").join("release").join("drawcraft"),
+        bundle.join("Contents").join("MacOS").join("drawcraft"),
+    )?;
+    fs::write(
+        bundle.join("Contents").join("Info.plist"),
+        format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleName</key><string>DrawCraft</string>
+  <key>CFBundleDisplayName</key><string>DrawCraft</string>
+  <key>CFBundleExecutable</key><string>drawcraft</string>
+  <key>CFBundleIdentifier</key><string>app.drawcraft.desktop</string>
+  <key>CFBundleIconFile</key><string>DrawCraft</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>{env!("CARGO_PKG_VERSION")}</string>
+  <key>NSHighResolutionCapable</key><true/>
+</dict></plist>
+"#
+        ),
+    )?;
+    println!(
+        "bundled app icon: {}",
+        resources.join("DrawCraft.icns").display()
+    );
+    Ok(())
 }

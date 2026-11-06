@@ -63,6 +63,18 @@ jobs:
           if [ "$OS" = "windows" ]; then bin="drawcraft.exe"; fi
           mkdir -p "dist/$name"
           cp "target/release/$bin" LICENSE-MIT LICENSE-APACHE README.md CHANGELOG.md "dist/$name/"
+          if [ "$OS" = "linux" ]; then
+            # Launchable without a new installer: standard XDG icon and .desktop
+            # metadata sit beside the existing portable release binary.
+            cp assets/logo/drawcraft.desktop "dist/$name/DrawCraft.desktop"
+            mkdir -p "dist/$name/share/icons/hicolor/256x256/apps"
+            cp assets/logo/drawcraft-256.png "dist/$name/share/icons/hicolor/256x256/apps/drawcraft.png"
+          elif [ "$OS" = "macos" ]; then
+            # The existing xtask adds the portable .app bundle and its ICNS.
+            cp -R target/release/DrawCraft.app "dist/$name/DrawCraft.app"
+          else
+            cp assets/logo/drawcraft.ico "dist/$name/DrawCraft.ico"
+          fi
           if [ "$ARCHIVE" = "zip" ]; then
             (cd dist && 7z a -tzip "$name.zip" "$name" > /dev/null)
           else
