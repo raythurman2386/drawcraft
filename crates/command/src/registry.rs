@@ -310,7 +310,7 @@ pub fn commands() -> &'static [CommandDef] {
     &COMMANDS
 }
 
-static COMMANDS: [CommandDef; 69] = [
+static COMMANDS: [CommandDef; 70] = [
     // ---- File & document -------------------------------------------------
     cmd(
         ids::FILE_NEW,
@@ -938,6 +938,19 @@ static COMMANDS: [CommandDef; 69] = [
         Category::View,
         Scope::Editor,
         &[ParamDef::required("minimap", "Minimap", ParamKind::Boolean)],
+    ),
+    cmd(
+        ids::VIEW_SET_TOUCH_DRAW,
+        "Draw with touch",
+        "Draw with a finger instead of panning the canvas. A pen always draws, \
+         and two-finger gestures always pan and zoom.",
+        Category::View,
+        Scope::Editor,
+        &[ParamDef::required(
+            "touch_draw",
+            "Touch draws",
+            ParamKind::Boolean,
+        )],
     ),
     // ---- Tools ----------------------------------------------------------
     cmd(

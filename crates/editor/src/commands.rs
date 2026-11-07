@@ -274,6 +274,13 @@ impl Editor {
                     .unwrap_or(false);
                 Ok(json!({"minimap": self.view.minimap}))
             }
+            ids::VIEW_SET_TOUCH_DRAW => {
+                self.view.touch_draw = params
+                    .get("touch_draw")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                Ok(json!({"touch_draw": self.view.touch_draw}))
+            }
 
             // ---- Tools --------------------------------------------------
             ids::TOOL_SET => {

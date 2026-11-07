@@ -17,6 +17,10 @@ pub struct ViewState {
     pub focus: bool,
     pub minimap: bool,
     pub grid_size: f64,
+    /// When set, a single finger draws with the active tool instead of panning
+    /// the canvas. A pen always draws; touch always pans and pinch-zooms
+    /// otherwise. Two-finger gestures navigate regardless of this flag.
+    pub touch_draw: bool,
 }
 
 impl Default for ViewState {
@@ -27,6 +31,7 @@ impl Default for ViewState {
             focus: false,
             minimap: false,
             grid_size: 20.0,
+            touch_draw: false,
         }
     }
 }
@@ -71,6 +76,15 @@ impl StyleUpdate {
             style.font_family = value.clone();
         }
     }
+}
+
+/// Owned pre-gesture state. Keeping both stacks also preserves redo and any
+/// oldest undo entries evicted by mutations at the history limit.
+#[derive(Clone, Debug)]
+pub struct EditCheckpoint {
+    doc: Document,
+    history: History,
+    selection: Selection,
 }
 
 /// The headless editor.
@@ -160,8 +174,36 @@ impl Editor {
         Ok(())
     }
 
-    pub fn snapshot(&mut self) {
-        self.history.record(&self.doc);
+    /// Capture before the first mutation, independently of snapshot deduplication.
+    #[must_use]
+    pub fn checkpoint(&self) -> EditCheckpoint {
+        EditCheckpoint {
+            doc: self.doc.clone(),
+            history: self.history.clone(),
+            selection: self.selection.clone(),
+        }
+    }
+
+    /// Abandon all mutations since the checkpoint without changing history.
+    pub fn restore_checkpoint(&mut self, checkpoint: EditCheckpoint) {
+        self.doc = checkpoint.doc;
+        self.history = checkpoint.history;
+        self.selection = checkpoint.selection;
+    }
+
+    pub fn snapshot(&mut self) -> bool {
+        self.history.record(&self.doc)
+    }
+
+    /// Undo the most recent [`Self::snapshot`] without leaving an undo step.
+    ///
+    /// Only restores one snapshot; multi-mutation gestures must use a checkpoint.
+    pub fn rollback_snapshot(&mut self) -> bool {
+        let changed = self.history.rollback(&mut self.doc);
+        if changed {
+            self.prune_selection();
+        }
+        changed
     }
 
     pub fn next_shape_id(&self) -> ShapeId {

@@ -25,8 +25,8 @@ mod tool;
 pub use drawcraft_document::{Document, ShapeId, ShapeKind, ShapeRecord, Style};
 pub use drawcraft_geometry::{Camera, Rect, Vec2};
 pub use editor::{
-    Editor, LINEAR_CREATE_MIN_LENGTH, StyleUpdate, ViewState, default_style, default_style_for,
-    linear_create_drag_commits, resolve_arrow_endpoints,
+    EditCheckpoint, Editor, LINEAR_CREATE_MIN_LENGTH, StyleUpdate, ViewState, default_style,
+    default_style_for, linear_create_drag_commits, resolve_arrow_endpoints,
 };
 pub use error::EditError;
 pub use history::History;

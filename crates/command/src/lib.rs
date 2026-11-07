@@ -105,6 +105,7 @@ pub mod ids {
     pub const VIEW_SET_GRID: &str = "view.set_grid";
     pub const VIEW_SET_FOCUS: &str = "view.set_focus";
     pub const VIEW_SET_MINIMAP: &str = "view.set_minimap";
+    pub const VIEW_SET_TOUCH_DRAW: &str = "view.set_touch_draw";
 
     // Tools.
     pub const TOOL_SET: &str = "tool.set";

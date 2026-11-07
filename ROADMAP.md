@@ -28,7 +28,7 @@ v1 ships when all **P0** items below are complete and the quality gate is green:
 | --- | --- | --- |
 | Workspace / layers | ✅ | 10 crates, enforced by `xtask layers`; strict clippy; 70+ tests |
 | Document model | ✅ | records, styles, pages, validation, unknown-field preservation |
-| Command surface | ✅ | 69 commands; editor + session dispatch coverage; CLI + MCP + UI share it |
+| Command surface | ✅ | 70 commands; editor + session dispatch coverage; CLI + MCP + UI share it |
 | Rendering | ✅ | shared scene; all 20 geometric shapes; text, images, arrowheads, patterns |
 | SVG export | ✅ | paths, dashes, text, clips, arrowheads, images |
 | PNG export | ✅ | resvg rasterisation, scale + transparency limits |
@@ -36,7 +36,7 @@ v1 ships when all **P0** items below are complete and the quality gate is green:
 | Editing | 🟡 | move/resize/rotate/flip, duplicate, Alt-drag, snapping, group, lock, z-order, align, distribute, undo/redo, pages |
 | Arrows | 🟡 | binding + straight/bent/elbow + heads; vertex editing not yet |
 | Documents | ✅ | save/open/recent; autosave; crash recovery; external-change detection; atomic writes |
-| View | ✅ | pan, zoom, pinch, fit, minimap, dark, focus, grid |
+| View | ✅ | pan, zoom, pinch, fit, minimap, dark, focus, grid; pen draws (X11/XWayland), finger navigates |
 | WASM UI | 🟡 | core crates build; browser entry not wired |
 | `.tldr` interop | ❌ | planned for 1.1; format remains native and clean-room |
 
@@ -55,6 +55,7 @@ The interaction model must be complete before adding more surface area.
 - [ ] **Alt-drag copy**: verify it copies groups, arrows, and frame membership; add a command (`edit.duplicate_drag`) so agents can reproduce it.
 - [ ] **Undo semantics**: coalesce continuous style changes (colour picker/slider) into one step; make page switches non-undoable; test deep history.
 - [ ] **Keyboard**: document shortcuts, focus handling, and command palette parity.
+- [x] **Pen and touch**: under X11/XWayland a stylus draws; a finger pans and two fingers pan + pinch-zoom; touch cancels a finger gesture but never a pen stroke; `view.set_touch_draw` enables finger drawing. Native-Wayland pen clicks, pressure, pen hover, and full palm rejection remain open: winit 0.30 has no tablet-v2 support, so on Hyprland the pen moves the cursor but its tip and buttons are not delivered. Use XWayland (`WAYLAND_DISPLAY` unset) for pen input until tablet support lands.
 
 **Exit:** a 50-action scripted editing scenario passes through commands; UI smoke test covers every gesture.
 
